@@ -9,18 +9,24 @@
 #include <optional>
 #include <tuple>
 
+#include <ruckig/roots.hpp>
+
 
 namespace ruckig {
 
 //! Information about the position extrema
 struct PositionExtrema {
+    //! The extreme position
     double min, max;
+
+    //! Time when the positions are reached
     double t_min, t_max;
 };
 
 
 //! The state profile for position, velocity, acceleration and jerk for a single DoF
-struct Profile {
+class Profile {
+public:
     enum class Limits { ACC0_ACC1_VEL, VEL, ACC0, ACC1, ACC0_ACC1, ACC0_VEL, ACC1_VEL, NONE } limits;
     enum class Direction { UP, DOWN } direction;
     enum class JerkSigns { UDDU, UDUD } jerk_signs;
@@ -39,7 +45,7 @@ struct Profile {
 
     // For velocity interface
     template<JerkSigns jerk_signs, Limits limits>
-    bool check(double jf, double aMax, double aMin) {
+    bool check_for_velocity(double jf, double aMax, double aMin) {
         if (t[0] < 0) {
             return false;
         }
@@ -83,14 +89,19 @@ struct Profile {
 
         // Velocity limit can be broken in the beginning if both initial velocity and acceleration are too high
         // std::cout << std::setprecision(15) << "target: " << std::abs(p[7]-pf) << " " << std::abs(v[7] - vf) << " " << std::abs(a[7] - af) << " T: " << t_sum[6] << " " << to_string() << std::endl;
-        return std::abs(v[7] - vf) < 1e-8
-            && std::abs(a[7] - af) < 1e-12 // This is not really needed, but we want to double check
+        return std::abs(v[7] - vf) < 1e-8 && std::abs(a[7] - af) < 1e-10
             && a[1] >= aLowLim && a[3] >= aLowLim && a[5] >= aLowLim
             && a[1] <= aUppLim && a[3] <= aUppLim && a[5] <= aUppLim;
     }
 
-    // For position interface
     template<JerkSigns jerk_signs, Limits limits>
+    inline bool check_for_velocity_with_timing(double, double jf, double aMax, double aMin) {
+        // Time doesn't need to be checked as every profile has a: tf - ... equation
+        return check_for_velocity<jerk_signs, limits>(jf, aMax, aMin); // && (std::abs(t_sum[6] - tf) < 1e-8);
+    }
+
+    // For position interface
+    template<JerkSigns jerk_signs, Limits limits, bool set_limits = false>
     bool check(double jf, double vMax, double vMin, double aMax, double aMin) {
         if (t[0] < 0) {
             return false;
@@ -141,9 +152,27 @@ struct Profile {
             v[i+1] = v[i] + t[i] * (a[i] + t[i] * j[i] / 2);
             p[i+1] = p[i] + t[i] * (v[i] + t[i] * (a[i] / 2 + t[i] * j[i] / 6));
 
-            if constexpr (limits == Limits::ACC0_ACC1_VEL || limits == Limits::ACC0_VEL || limits == Limits::ACC1_VEL || limits == Limits::VEL) {
+            if constexpr (limits == Limits::ACC0_ACC1_VEL || limits == Limits::ACC0_ACC1 || limits == Limits::ACC0_VEL || limits == Limits::ACC1_VEL || limits == Limits::VEL) {
                 if (i == 2) {
                     a[3] = 0.0;
+                }
+            }
+
+            if constexpr (set_limits) {
+                if constexpr (limits == Limits::ACC1) {
+                    if (i == 2) {
+                        a[3] = aMin;
+                    }
+                }
+
+                if constexpr (limits == Limits::ACC0_ACC1) {
+                    if (i == 0) {
+                        a[1] = aMax;
+                    }
+
+                    if (i == 4) {
+                        a[5] = aMin;
+                    }
                 }
             }
 
@@ -163,24 +192,22 @@ struct Profile {
 
         // Velocity limit can be broken in the beginning if both initial velocity and acceleration are too high
         // std::cout << std::setprecision(16) << "target: " << std::abs(p[7]-pf) << " " << std::abs(v[7] - vf) << " " << std::abs(a[7] - af) << " T: " << t_sum[6] << " " << to_string() << std::endl;
-        return std::abs(p[7] - pf) < 1e-8
-            && std::abs(v[7] - vf) < 1e-8
-            && std::abs(a[7] - af) < 1e-12 // This is not really needed, but we want to double check
+        return std::abs(p[7] - pf) < 1e-8 && std::abs(v[7] - vf) < 1e-8 && std::abs(a[7] - af) < 1e-10
             && a[1] >= aLowLim && a[3] >= aLowLim && a[5] >= aLowLim
             && a[1] <= aUppLim && a[3] <= aUppLim && a[5] <= aUppLim
             && v[3] <= vUppLim && v[4] <= vUppLim && v[5] <= vUppLim && v[6] <= vUppLim
-            && v[3] >= vLowLim && v[4] >= vLowLim && v[5] >= vLowLim && v[6] >= vLowLim; // This is not really needed, but we want to double check
+            && v[3] >= vLowLim && v[4] >= vLowLim && v[5] >= vLowLim && v[6] >= vLowLim;
     }
 
     template<JerkSigns jerk_signs, Limits limits>
-    inline bool check(double, double jf, double vMax, double vMin, double aMax, double aMin) {
+    inline bool check_with_timing(double, double jf, double vMax, double vMin, double aMax, double aMin) {
         // Time doesn't need to be checked as every profile has a: tf - ... equation
         return check<jerk_signs, limits>(jf, vMax, vMin, aMax, aMin); // && (std::abs(t_sum[6] - tf) < 1e-8);
     }
 
     template<JerkSigns jerk_signs, Limits limits>
-    inline bool check(double tf, double jf, double vMax, double vMin, double aMax, double aMin, double jMax) {
-        return (std::abs(jf) < std::abs(jMax) + 1e-12) && check<jerk_signs, limits>(tf, jf, vMax, vMin, aMax, aMin);
+    inline bool check_with_timing(double tf, double jf, double vMax, double vMin, double aMax, double aMin, double jMax) {
+        return (std::abs(jf) < std::abs(jMax) + 1e-12) && check_with_timing<jerk_signs, limits>(tf, jf, vMax, vMin, aMax, aMin);
     }
 
     //! Integrate with constant jerk for duration t. Returns new position, new velocity, and new acceleration.
@@ -281,6 +308,38 @@ struct Profile {
         }
 
         return extrema;
+    }
+
+    bool get_first_state_at_position(double pt, double& time, double& vt, double& at, double offset = 0.0) const {
+        for (size_t i = 0; i < 7; ++i) {
+            if (std::abs(p[i] - pt) < std::numeric_limits<double>::epsilon()) {
+                time = offset + ((i > 0) ? t_sum[i-1] : 0.0);
+                vt = v[i];
+                at = a[i];
+                return true;
+            }
+
+            if (t[i] == 0.0) {
+                continue;
+            }
+
+            for (const double _t: Roots::solveCub(j[i]/6, a[i]/2, v[i], p[i]-pt)) {
+                if (0 < _t && _t <= t[i]) {
+                    time = offset + _t + ((i > 0) ? t_sum[i-1] : 0.0);
+                    std::tie(std::ignore, vt, at) = integrate(_t, p[i], v[i], a[i], j[i]);
+                    return true;
+                }
+            }
+        }
+
+        if (std::abs(pf - pt) < 1e-9) {
+            time = offset + t_sum[6];
+            vt = vf;
+            at = af;
+            return true;
+        }
+
+        return false;
     }
 
     std::string to_string() const {

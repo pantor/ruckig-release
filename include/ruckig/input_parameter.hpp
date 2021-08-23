@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <optional>
 #include <sstream>
+#include <type_traits>
+#include <vector>
 
 
 namespace ruckig {
@@ -20,7 +22,7 @@ enum Result {
 };
 
 
-enum class Interface {
+enum class ControlInterface {
     Position, ///< Position-control: Full control over the entire kinematic state (Default)
     Velocity, ///< Velocity-control: Ignores the current position, target position, and velocity limits
 };
@@ -41,7 +43,7 @@ enum class DurationDiscretization {
 //! Input type of the OTG
 template<size_t DOFs>
 class InputParameter {
-    template<class T> using Vector = std::array<T, DOFs>;
+    template<class T> using Vector = typename std::conditional<DOFs >= 1, std::array<T, DOFs>, std::vector<T>>::type;
 
     static std::string join(const Vector<double>& array) {
         std::ostringstream ss;
@@ -52,23 +54,68 @@ class InputParameter {
         return ss.str();
     }
 
-public:
-    static constexpr size_t degrees_of_freedom {DOFs};
+    void initialize() {
+        std::fill(current_velocity.begin(), current_velocity.end(), 0.0);
+        std::fill(current_acceleration.begin(), current_acceleration.end(), 0.0);
+        std::fill(target_velocity.begin(), target_velocity.end(), 0.0);
+        std::fill(target_acceleration.begin(), target_acceleration.end(), 0.0);
+        std::fill(enabled.begin(), enabled.end(), true);
+    }
 
-    Interface interface {Interface::Position};
+public:
+    size_t degrees_of_freedom;
+
+    ControlInterface control_interface {ControlInterface::Position};
     Synchronization synchronization {Synchronization::Time};
     DurationDiscretization duration_discretization {DurationDiscretization::Continuous};
 
-    Vector<double> current_position, current_velocity {}, current_acceleration {};
-    Vector<double> target_position, target_velocity {}, target_acceleration {};
+    //! Current state
+    Vector<double> current_position, current_velocity, current_acceleration;
+
+    //! Target state
+    Vector<double> target_position, target_velocity, target_acceleration;
+
+    //! Kinematic constraints
     Vector<double> max_velocity, max_acceleration, max_jerk;
     std::optional<Vector<double>> min_velocity, min_acceleration;
 
+    //! Intermediate waypoints (not yet used)
+    std::vector<Vector<double>> intermediate_positions;
+
+    //! Is the DoF considered for calculation?
     Vector<bool> enabled;
+
+    //! Per-DoF control_interface (overwrites global synchronization, not yet used)
+    // std::optional<Vector<ControlInterface>> per_dof_control_interface;
+
+    //! Per-DoF synchronization (overwrites global synchronization, not yet used)
+    // std::optional<Vector<Synchronization>> per_dof_synchronization;
+
+    //! Optional minimum trajectory duration
     std::optional<double> minimum_duration;
 
-    InputParameter() {
-        std::fill(enabled.begin(), enabled.end(), true);
+    //! Optional duration [s] after which the trajectory calculation is (softly) interrupted (not yet used)
+    std::optional<double> interrupt_calculation_duration;
+
+    template <size_t D = DOFs, typename std::enable_if<D >= 1, int>::type = 0>
+    InputParameter(): degrees_of_freedom(DOFs) {
+        initialize();
+    }
+
+    template <size_t D = DOFs, typename std::enable_if<D == 0, int>::type = 0>
+    InputParameter(size_t dofs): degrees_of_freedom(dofs) {
+        current_position.resize(dofs);
+        current_velocity.resize(dofs);
+        current_acceleration.resize(dofs);
+        target_position.resize(dofs);
+        target_velocity.resize(dofs);
+        target_acceleration.resize(dofs);
+        max_velocity.resize(dofs);
+        max_acceleration.resize(dofs);
+        max_jerk.resize(dofs);
+        enabled.resize(dofs);
+
+        initialize();
     }
 
     bool operator!=(const InputParameter<DOFs>& rhs) const {
@@ -82,11 +129,12 @@ public:
             || max_velocity != rhs.max_velocity
             || max_acceleration != rhs.max_acceleration
             || max_jerk != rhs.max_jerk
+            || intermediate_positions != rhs.intermediate_positions
             || enabled != rhs.enabled
             || minimum_duration != rhs.minimum_duration
             || min_velocity != rhs.min_velocity
             || min_acceleration != rhs.min_acceleration
-            || interface != rhs.interface
+            || control_interface != rhs.control_interface
             || synchronization != rhs.synchronization
             || duration_discretization != rhs.duration_discretization
         );
@@ -108,6 +156,13 @@ public:
         }
         if (min_acceleration) {
             ss << "inp.min_acceleration = [" << this->join(min_acceleration.value()) << "]\n";
+        }
+        if (!intermediate_positions.empty()) {
+            ss << "inp.intermediate_positions = [\n";
+            for (auto p: intermediate_positions) {
+                ss << "    [" << this->join(p) << "],\n";
+            }
+            ss << "]\n";
         }
         return ss.str();
     }

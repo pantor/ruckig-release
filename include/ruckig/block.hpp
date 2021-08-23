@@ -4,6 +4,7 @@
 #include <limits>
 #include <numeric>
 #include <optional>
+#include <string>
 
 #include <ruckig/profile.hpp>
 
@@ -47,29 +48,38 @@ public:
     explicit Block() { }
     explicit Block(const Profile& p_min): p_min(p_min), t_min(p_min.t_sum[6] + p_min.t_brake.value_or(0.0)) { }
 
-    template<size_t N>
+    template<size_t N, bool numerical_robust = true>
     static bool calculate_block(Block& block, std::array<Profile, N>& valid_profiles, size_t valid_profile_counter) {
-        // if (valid_profile_counter > 0)
-        // {
-        //     std::cout << "---\n " << valid_profile_counter << std::endl;
-        //     for (size_t i = 0; i < valid_profile_counter; ++i) {
-        //         std::cout << valid_profiles[i].t_sum[6] << " " << valid_profiles[i].to_string() << std::endl;
-        //     }
+        // std::cout << "---\n " << valid_profile_counter << std::endl;
+        // for (size_t i = 0; i < valid_profile_counter; ++i) {
+        //     std::cout << valid_profiles[i].t_sum[6] << " " << valid_profiles[i].to_string() << std::endl;
         // }
 
-        if (
-            (valid_profile_counter == 1)
-            || (valid_profile_counter == 2 && std::abs(valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6]) < 8*std::numeric_limits<double>::epsilon())
-        ) {
+        if (valid_profile_counter == 1) {
             block = Block(valid_profiles[0]);
             return true;
+
+        } else if (valid_profile_counter == 2) {
+            if (std::abs(valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6]) < 8*std::numeric_limits<double>::epsilon()) {
+                block = Block(valid_profiles[0]);
+                return true;
+            }
+
+            if constexpr (numerical_robust) {
+                size_t idx_min = (valid_profiles[0].t_sum[6] < valid_profiles[1].t_sum[6]) ? 0 : 1;
+                size_t idx_else_1 = (idx_min + 1) % 2;
+
+                block = Block(valid_profiles[idx_min]);
+                Block::add_interval(block.a, valid_profiles[idx_min], valid_profiles[idx_else_1]);
+                return true;
+            }
 
         // Only happens due to numerical issues
         } else if (valid_profile_counter == 4) {
             // Find "identical" profiles
-            if (std::abs(valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6]) < 16*std::numeric_limits<double>::epsilon() && valid_profiles[0].direction != valid_profiles[1].direction) {
+            if (std::abs(valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6]) < 32*std::numeric_limits<double>::epsilon() && valid_profiles[0].direction != valid_profiles[1].direction) {
                 remove_profile<N>(valid_profiles, valid_profile_counter, 1);
-            } else if (std::abs(valid_profiles[2].t_sum[6] - valid_profiles[3].t_sum[6]) < 16*std::numeric_limits<double>::epsilon()  && valid_profiles[2].direction != valid_profiles[3].direction) {
+            } else if (std::abs(valid_profiles[2].t_sum[6] - valid_profiles[3].t_sum[6]) < 256*std::numeric_limits<double>::epsilon() && valid_profiles[2].direction != valid_profiles[3].direction) {
                 remove_profile<N>(valid_profiles, valid_profile_counter, 3);
             } else if (std::abs(valid_profiles[0].t_sum[6] - valid_profiles[3].t_sum[6]) < 256*std::numeric_limits<double>::epsilon() && valid_profiles[0].direction != valid_profiles[3].direction) {
                 remove_profile<N>(valid_profiles, valid_profile_counter, 3);
@@ -115,6 +125,17 @@ public:
 
     inline bool is_blocked(double t) const {
         return (t < t_min) || (a && a->left < t && t < a->right) || (b && b->left < t && t < b->right);
+    }
+
+    std::string to_string() const {
+        std::string result = "[" + std::to_string(t_min) + " ";
+        if (a) {
+            result += std::to_string(a->left) + "] [" + std::to_string(a->right) + " ";
+        }
+        if (b) {
+            result += std::to_string(b->left) + "] [" + std::to_string(b->right) + " ";
+        }
+        return result + "-";
     }
 };
 
