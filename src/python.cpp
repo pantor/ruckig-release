@@ -17,103 +17,14 @@ using namespace pybind11::literals; // to bring in the `_a` literal
 using namespace ruckig;
 
 
-template<size_t MAX>
-struct PerDOF {
-    static std::string append(std::string name, size_t DOFs) {
-        return name.append(std::to_string(DOFs));
-    }
-
-    template<size_t DOFs>
-    static void define(py::module& m) {
-        using IP = InputParameter<DOFs>;
-        using OP = OutputParameter<DOFs>;
-
-        py::class_<Trajectory<DOFs>>(m, append("Trajectory", DOFs).c_str())
-            .def_property_readonly("duration", &Trajectory<DOFs>::get_duration)
-            .def_property_readonly("independent_min_durations", &Trajectory<DOFs>::get_independent_min_durations)
-            .def_property_readonly("position_extrema", &Trajectory<DOFs>::get_position_extrema)
-            .def("at_time", [](const Trajectory<DOFs>& traj, double time) {
-                std::array<double, DOFs> new_position, new_velocity, new_acceleration;
-                traj.at_time(time, new_position, new_velocity, new_acceleration);
-                return py::make_tuple(new_position, new_velocity, new_acceleration);
-            });
-
-        py::class_<IP>(m, append("InputParameter", DOFs).c_str())
-            .def(py::init<>())
-            .def_readonly_static("degrees_of_freedom", &IP::degrees_of_freedom)
-            .def_readwrite("current_position", &IP::current_position)
-            .def_readwrite("current_velocity", &IP::current_velocity)
-            .def_readwrite("current_acceleration", &IP::current_acceleration)
-            .def_readwrite("target_position", &IP::target_position)
-            .def_readwrite("target_velocity", &IP::target_velocity)
-            .def_readwrite("target_acceleration", &IP::target_acceleration)
-            .def_readwrite("max_velocity", &IP::max_velocity)
-            .def_readwrite("max_acceleration", &IP::max_acceleration)
-            .def_readwrite("max_jerk", &IP::max_jerk)
-            .def_readwrite("min_velocity", &IP::min_velocity)
-            .def_readwrite("min_acceleration", &IP::min_acceleration)
-            .def_readwrite("enabled", &IP::enabled)
-            .def_readwrite("interface", &IP::interface)
-            .def_readwrite("synchronization", &IP::synchronization)
-            .def_readwrite("duration_discretization", &IP::duration_discretization)
-            .def_readwrite("minimum_duration", &IP::minimum_duration)
-            .def(py::self != py::self)
-            .def("__repr__", static_cast<std::string (IP::*)() const>(&IP::to_string));
-
-        py::class_<OP>(m, append("OutputParameter", DOFs).c_str())
-            .def(py::init<>())
-            .def_readonly_static("degrees_of_freedom", &IP::degrees_of_freedom)
-            .def_readonly("new_position", &OP::new_position)
-            .def_readonly("new_velocity", &OP::new_velocity)
-            .def_readonly("new_acceleration", &OP::new_acceleration)
-            .def_readonly("trajectory", &OP::trajectory)
-            .def_readonly("time", &OP::time)
-            .def_readonly("new_calculation", &OP::new_calculation)
-            .def_readonly("calculation_duration", &OP::calculation_duration)
-            .def("__copy__",  [](const OP &self) {
-                return OP(self);
-            });
-
-        py::class_<Ruckig<DOFs, true>>(m, append("Ruckig", DOFs).c_str())
-            .def(py::init<double>(), "delta_time"_a)
-            .def_readonly("delta_time", &Ruckig<DOFs, true>::delta_time)
-            .def_readonly_static("degrees_of_freedom", &Ruckig<DOFs, true>::degrees_of_freedom)
-            .def("validate_input", &Ruckig<DOFs, true>::validate_input)
-            .def("update", &Ruckig<DOFs, true>::update);
-
-    #ifdef WITH_REFLEXXES
-        py::class_<Reflexxes<DOFs>>(m, append("Reflexxes", DOFs).c_str())
-            .def(py::init<double>(), "delta_time"_a)
-            .def_readonly("delta_time", &Reflexxes<DOFs>::delta_time)
-            .def_readonly_static("degrees_of_freedom", &Reflexxes<DOFs>::degrees_of_freedom)
-            .def("update", &Reflexxes<DOFs>::update);
-    #endif
-
-        // Recurse upwards
-        if constexpr (DOFs < MAX - 1) PerDOF<MAX>::define<DOFs+1>(m);
-    }
-};
-
-
-template<class T, typename... Args>
-py::object cast_unique(Args&&... args) {
-    return py::cast(std::unique_ptr<T>(new T(std::forward<Args>(args)...)));
-}
-
-py::object handle_dof_error(size_t dofs) {
-    throw std::runtime_error("For Python, the number of DOFs needs to be between 1 and 10, but is " + std::to_string(dofs) +  ".");
-    return py::none();
-}
-
-
 PYBIND11_MODULE(ruckig, m) {
     m.doc() = "Online Trajectory Generation. Real-time and time-optimal trajectory calculation \
 given a target waypoint with position, velocity, and acceleration, starting from any initial state \
 limited by velocity, acceleration, and jerk constraints.";
 
-    py::enum_<Interface>(m, "Interface")
-        .value("Position", Interface::Position)
-        .value("Velocity", Interface::Velocity)
+    py::enum_<ControlInterface>(m, "ControlInterface")
+        .value("Position", ControlInterface::Position)
+        .value("Velocity", ControlInterface::Velocity)
         .export_values();
 
     py::enum_<Synchronization>(m, "Synchronization")
@@ -141,73 +52,84 @@ limited by velocity, acceleration, and jerk constraints.";
         .def_readonly("min", &PositionExtrema::min)
         .def_readonly("max", &PositionExtrema::max)
         .def_readonly("t_min", &PositionExtrema::t_min)
-        .def_readonly("t_max", &PositionExtrema::t_max);
+        .def_readonly("t_max", &PositionExtrema::t_max)
+        .def("__repr__", [](const PositionExtrema& ext) {
+            return "[" + std::to_string(ext.min) + ", " + std::to_string(ext.max) + "]";
+        });
 
-    PerDOF<11>::define<1>(m);
+    py::class_<Trajectory<DynamicDOFs>>(m, "Trajectory")
+        .def(py::init<size_t>(), "dofs"_a)
+        .def_readonly("degrees_of_freedom", &Trajectory<DynamicDOFs>::degrees_of_freedom)
+        .def_property_readonly("duration", &Trajectory<DynamicDOFs>::get_duration)
+        .def_property_readonly("intermediate_durations", &Trajectory<DynamicDOFs>::get_intermediate_durations)
+        .def_property_readonly("independent_min_durations", &Trajectory<DynamicDOFs>::get_independent_min_durations)
+        .def_property_readonly("position_extrema", &Trajectory<DynamicDOFs>::get_position_extrema)
+        .def("at_time", [](const Trajectory<DynamicDOFs>& traj, double time) {
+            std::vector<double> new_position(traj.degrees_of_freedom), new_velocity(traj.degrees_of_freedom), new_acceleration(traj.degrees_of_freedom);
+            traj.at_time(time, new_position, new_velocity, new_acceleration);
+            return py::make_tuple(new_position, new_velocity, new_acceleration);
+        })
+        .def("get_first_time_at_position", [](const Trajectory<DynamicDOFs>& traj, size_t dof, double position) -> py::object {
+            double time;
+            if (traj.get_first_time_at_position(dof, position, time)) {
+                return py::cast(time);
+            }
+            return py::none();
+        });
 
-    m.def("InputParameter", [](size_t dofs) {
-        switch (dofs) {
-            case 1: return cast_unique<InputParameter<1>>();
-            case 2: return cast_unique<InputParameter<2>>();
-            case 3: return cast_unique<InputParameter<3>>();
-            case 4: return cast_unique<InputParameter<4>>();
-            case 5: return cast_unique<InputParameter<5>>();
-            case 6: return cast_unique<InputParameter<6>>();
-            case 7: return cast_unique<InputParameter<7>>();
-            case 8: return cast_unique<InputParameter<8>>();
-            case 9: return cast_unique<InputParameter<9>>();
-            case 10: return cast_unique<InputParameter<10>>();
-            default: return handle_dof_error(dofs);
-        }
-    }, "dofs"_a);
+    py::class_<InputParameter<DynamicDOFs>>(m, "InputParameter")
+        .def(py::init<size_t>(), "dofs"_a)
+        .def_readonly("degrees_of_freedom", &InputParameter<DynamicDOFs>::degrees_of_freedom)
+        .def_readwrite("current_position", &InputParameter<DynamicDOFs>::current_position)
+        .def_readwrite("current_velocity", &InputParameter<DynamicDOFs>::current_velocity)
+        .def_readwrite("current_acceleration", &InputParameter<DynamicDOFs>::current_acceleration)
+        .def_readwrite("target_position", &InputParameter<DynamicDOFs>::target_position)
+        .def_readwrite("target_velocity", &InputParameter<DynamicDOFs>::target_velocity)
+        .def_readwrite("target_acceleration", &InputParameter<DynamicDOFs>::target_acceleration)
+        .def_readwrite("max_velocity", &InputParameter<DynamicDOFs>::max_velocity)
+        .def_readwrite("max_acceleration", &InputParameter<DynamicDOFs>::max_acceleration)
+        .def_readwrite("max_jerk", &InputParameter<DynamicDOFs>::max_jerk)
+        .def_readwrite("min_velocity", &InputParameter<DynamicDOFs>::min_velocity)
+        .def_readwrite("min_acceleration", &InputParameter<DynamicDOFs>::min_acceleration)
+        .def_readwrite("intermediate_positions", &InputParameter<DynamicDOFs>::intermediate_positions)
+        .def_readwrite("enabled", &InputParameter<DynamicDOFs>::enabled)
+        .def_readwrite("control_interface", &InputParameter<DynamicDOFs>::control_interface)
+        .def_readwrite("synchronization", &InputParameter<DynamicDOFs>::synchronization)
+        .def_readwrite("duration_discretization", &InputParameter<DynamicDOFs>::duration_discretization)
+        .def_readwrite("minimum_duration", &InputParameter<DynamicDOFs>::minimum_duration)
+        .def_readwrite("interrupt_calculation_duration", &InputParameter<DynamicDOFs>::interrupt_calculation_duration)
+        .def(py::self != py::self)
+        .def("__repr__", static_cast<std::string (InputParameter<DynamicDOFs>::*)() const>(&InputParameter<DynamicDOFs>::to_string));
 
-    m.def("OutputParameter", [](size_t dofs) {
-        switch (dofs) {
-            case 1: return cast_unique<OutputParameter<1>>();
-            case 2: return cast_unique<OutputParameter<2>>();
-            case 3: return cast_unique<OutputParameter<3>>();
-            case 4: return cast_unique<OutputParameter<4>>();
-            case 5: return cast_unique<OutputParameter<5>>();
-            case 6: return cast_unique<OutputParameter<6>>();
-            case 7: return cast_unique<OutputParameter<7>>();
-            case 8: return cast_unique<OutputParameter<8>>();
-            case 9: return cast_unique<OutputParameter<9>>();
-            case 10: return cast_unique<OutputParameter<10>>();
-            default: return handle_dof_error(dofs);
-        }
-    }, "dofs"_a);
+    py::class_<OutputParameter<DynamicDOFs>>(m, "OutputParameter")
+        .def(py::init<size_t>(), "dofs"_a)
+        .def_readonly("degrees_of_freedom", &OutputParameter<DynamicDOFs>::degrees_of_freedom)
+        .def_readonly("new_position", &OutputParameter<DynamicDOFs>::new_position)
+        .def_readonly("new_velocity", &OutputParameter<DynamicDOFs>::new_velocity)
+        .def_readonly("new_acceleration", &OutputParameter<DynamicDOFs>::new_acceleration)
+        .def_readonly("trajectory", &OutputParameter<DynamicDOFs>::trajectory)
+        .def_readonly("time", &OutputParameter<DynamicDOFs>::time)
+        .def_readonly("new_calculation", &OutputParameter<DynamicDOFs>::new_calculation)
+        .def_readonly("was_calculation_interrupted", &OutputParameter<DynamicDOFs>::was_calculation_interrupted)
+        .def_readonly("calculation_duration", &OutputParameter<DynamicDOFs>::calculation_duration)
+        .def("__copy__",  [](const OutputParameter<DynamicDOFs> &self) {
+            return OutputParameter<DynamicDOFs>(self);
+        });
 
-    m.def("Ruckig", [](size_t dofs, double delta_time) {
-        switch (dofs) {
-            case 1: return cast_unique<Ruckig<1, true>>(delta_time);
-            case 2: return cast_unique<Ruckig<2, true>>(delta_time);
-            case 3: return cast_unique<Ruckig<3, true>>(delta_time);
-            case 4: return cast_unique<Ruckig<4, true>>(delta_time);
-            case 5: return cast_unique<Ruckig<5, true>>(delta_time);
-            case 6: return cast_unique<Ruckig<6, true>>(delta_time);
-            case 7: return cast_unique<Ruckig<7, true>>(delta_time);
-            case 8: return cast_unique<Ruckig<8, true>>(delta_time);
-            case 9: return cast_unique<Ruckig<9, true>>(delta_time);
-            case 10: return cast_unique<Ruckig<10, true>>(delta_time);
-            default: return handle_dof_error(dofs);
-        }
-    }, "dofs"_a, "delta_time"_a);
+    py::class_<Ruckig<0, true>>(m, "Ruckig")
+        .def(py::init<size_t>(), "dofs"_a)
+        .def(py::init<size_t, double>(), "dofs"_a, "delta_time"_a)
+        .def_readonly("delta_time", &Ruckig<0, true>::delta_time)
+        .def_readonly("degrees_of_freedom", &Ruckig<0, true>::degrees_of_freedom)
+        .def("validate_input", &Ruckig<0, true>::validate_input)
+        .def("calculate", &Ruckig<0, true>::calculate)
+        .def("update", &Ruckig<0, true>::update);
 
 #ifdef WITH_REFLEXXES
-    m.def("Reflexxes", [](size_t dofs, double delta_time) {
-        switch (dofs) {
-            case 1: return cast_unique<Reflexxes<1>>(delta_time);
-            case 2: return cast_unique<Reflexxes<2>>(delta_time);
-            case 3: return cast_unique<Reflexxes<3>>(delta_time);
-            case 4: return cast_unique<Reflexxes<4>>(delta_time);
-            case 5: return cast_unique<Reflexxes<5>>(delta_time);
-            case 6: return cast_unique<Reflexxes<6>>(delta_time);
-            case 7: return cast_unique<Reflexxes<7>>(delta_time);
-            case 8: return cast_unique<Reflexxes<8>>(delta_time);
-            case 9: return cast_unique<Reflexxes<9>>(delta_time);
-            case 10: return cast_unique<Reflexxes<10>>(delta_time);
-            default: return handle_dof_error(dofs);
-        }
-    }, "dofs"_a, "delta_time"_a);
+    py::class_<Reflexxes<DynamicDOFs>>(m, "Reflexxes")
+        .def(py::init<size_t, double>(), "dofs"_a, "delta_time"_a)
+        .def_readonly("degrees_of_freedom", &Reflexxes<DynamicDOFs>::degrees_of_freedom)
+        .def_readonly("delta_time", &Reflexxes<DynamicDOFs>::delta_time)
+        .def("update", &Reflexxes<DynamicDOFs>::update);
 #endif
 }
