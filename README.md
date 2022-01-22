@@ -1,7 +1,7 @@
 <div align="center">
   <h1 align="center">Ruckig</h1>
   <h3 align="center">
-    Online Trajectory Generation. Real-time. Jerk-constrained. Time-optimal.
+    Instantaneous Motion Generation for Robots and Machines.
   </h3>
 </div>
 <p align="center">
@@ -22,9 +22,9 @@
   </a>
 </p>
 
-Ruckig calculates a time-optimal trajectory to a *target* waypoint with position, velocity, and acceleration starting from *any* initial state limited by velocity, acceleration, and jerk constraints. Ruckig is a more powerful and open-source alternative to the [Reflexxes Type IV](http://reflexxes.ws/) library. In fact, Ruckig is the first Type V trajectory generator for arbitrary target states and even supports directional velocity and acceleration limits, while also being faster on top. For robotics and machining applications, Ruckig allows both instant reactions to unforeseen events as well as simple offline trajectory planning.
+Ruckig generates trajectories on-the-fly, allowing robots and machines to react instantaneously to sensor input. Ruckig calculates a trajectory to a *target* waypoint (with position, velocity, and acceleration) starting from *any* initial state limited by velocity, acceleration, and jerk constraints. Besides the target state, Ruckig allows to define intermediate positions for waypoint following. For state-to-state motions, Ruckig guarantees a time-optimal solution. With intermediate waypoints, Ruckig calculates the path and its time parametrization jointly, resulting in significantly faster trajectories compared to traditional methods. 
 
-More information can be found in the corresponding paper [Jerk-limited Real-time Trajectory Generation with Arbitrary Target States](https://arxiv.org/abs/2105.04830), accepted for the *Robotics: Science and Systems (RSS), 2021* conference.
+More information can be found at [ruckig.com](https://ruckig.com) and in the corresponding paper [Jerk-limited Real-time Trajectory Generation with Arbitrary Target States](https://arxiv.org/abs/2105.04830), accepted for the *Robotics: Science and Systems (RSS), 2021* conference.
 
 
 ## Installation
@@ -40,7 +40,7 @@ make
 
 To install Ruckig in a system-wide directory, use `(sudo) make install`. An example of using Ruckig in your CMake project is given by `examples/CMakeLists.txt`. However, you can also include Ruckig as a directory within your project and call `add_subdirectory(ruckig)` in your parent `CMakeLists.txt`.
 
-Ruckig is also available as a Python module, in particular for development or debugging purposes. It can be installed from [PyPI](https://pypi.org/project/ruckig/) via
+Ruckig is also available as a Python module, in particular for development or debugging purposes. The Ruckig *Community Version* can be installed from [PyPI](https://pypi.org/project/ruckig/) via
 ```bash
 pip install ruckig
 ```
@@ -49,7 +49,7 @@ When using CMake, the Python module can be built using the `BUILD_PYTHON_MODULE`
 
 ## Tutorial
 
-Furthermore, we will explain the basics to get started with online generated trajectories within your application. Some working examples can be found in the `examples` directory, for example `position.cpp` for C++. A time-optimal trajectory for a single degree of freedom is shown in the figure below.
+Furthermore, we will explain the basics to get started with online generated trajectories within your application. There is also a [collection of examples](https://docs.ruckig.com/pages.html) that guide you through the most important features of Ruckig. A time-optimal trajectory for a single degree of freedom is shown in the figure below. We also added plots for the resulting trajectories of all examples. Let's get started!
 
 ![Trajectory Profile](https://github.com/pantor/ruckig/raw/master/doc/example_profile.png?raw=true)
 
@@ -86,14 +86,37 @@ Given all input and output resources, we can iterate over the trajectory at each
 ```.cpp
 while (ruckig.update(input, output) == Result::Working) {
   // Make use of the new state here!
+  // e.g. robot->setJointPositions(output.new_position);
 
-  input.current_position = output.new_position;
-  input.current_velocity = output.new_velocity;
-  input.current_acceleration = output.new_acceleration;
+  output.pass_to_input(input); // Don't forget this!
 }
 ```
 
-During the update step, you'll need to copy the new kinematic state into the current state. If the current state is not the expected, pre-calculated trajectory, ruckig will calculate a new trajectory with the novel input. When the trajectory has reached the target state, the `update` function will return `Result::Finished`.
+Within the control loop, you need to update the *current state* of the input parameter according to the calculated trajectory. Therefore, the `pass_to_input` method copies the new kinematic state of the output to the current kinematic state of the input parameter. If (in the next step) the current state is not the expected, pre-calculated trajectory, Ruckig will calculate a new trajectory based on the novel input. When the trajectory has reached the target state, the `update` function will return `Result::Finished`.
+
+
+### Intermediate Waypoints
+
+The Ruckig Community Version now supports intermediate waypoints via a [remote API](http://api.ruckig.com/docs). Make sure to include `-DBUILD_ONLINE_CLIENT=ON` as a CMake flag when compiling - the PyPI Python version should bring that out of the box. To allocate the necessary memory for a variable number of waypoints beforehand, we need to pass the maximum number of waypoints to Ruckig via
+```.cpp
+Ruckig<6> otg {0.001, 8};
+InputParameter<6> input {8};
+OutputParameter<6> output {8};
+```
+The `InputParameter` class takes the number of waypoints as an optional input, however usually you will fill in the values (and therefore reserve its memory) yourself. Then you're ready to set intermediate via points by
+```.cpp
+input.intermediate_positions = {
+  {0.2, ...},
+  {0.8, ...},
+};
+```
+As soon as at least one intermediate positions is given, the Ruckig Community Version switches to the mentioned (of course, non real-time capable) remote API. If you require real-time calculation on your own hardware, we refer to the *Ruckig Pro Version*.
+
+When using *intermediate positions*, both the underlying motion planning problem as well as its calculation changes significantly. In particular, there are some fundamental limitations for jerk-limited online trajectory generation regarding the usage of waypoints. Please find more information about these limitations [here](https://docs.ruckig.com/md_pages_intermediate_waypoints.html), and in general we recommend to use
+```.cpp
+input.intermediate_positions = otg.filter_intermediate_positions(input.intermediate_positions, {0.1, ...});
+```
+to filter waypoints according to a (high) threshold distance. Setting *interrupt_calculation_duration* makes sure to be real-time capable by refining the solution in the next control invocation. Note that this is a soft interruption of the calculation. Currently, no minimum or discrete durations are supported when using intermediate positions.
 
 
 ### Input Parameter
@@ -107,6 +130,8 @@ Vector current_position;
 Vector current_velocity; // Initialized to zero
 Vector current_acceleration; // Initialized to zero
 
+std::vector<Vector> intermediate_positions; // (only in Pro Version)
+
 Vector target_position;
 Vector target_velocity; // Initialized to zero
 Vector target_acceleration; // Initialized to zero
@@ -118,35 +143,46 @@ Vector max_jerk;
 std::optional<Vector> min_velocity; // If not given, the negative maximum velocity will be used.
 std::optional<Vector> min_acceleration; // If not given, the negative maximum acceleration will be used.
 
+std::optional<Vector> min_position; // (only in Pro Version)
+std::optional<Vector> max_position; // (only in Pro Version)
+
 std::array<bool, DOFs> enabled; // Initialized to true
 std::optional<double> minimum_duration;
+std::optional<double> interrupt_calculation_duration; // [µs], (only in Pro Version)
 
 ControlInterface control_interface; // The default position interface controls the full kinematic state.
 Synchronization synchronization; // Synchronization behavior of multiple DoFs
 DurationDiscretization duration_discretization; // Whether the duration should be a discrete multiple of the control cycle (off by default)
+
+std::optional<Vector<ControlInterface>> per_dof_control_interface; // Sets the control interface for each DoF individually, overwrites global control_interface
+std::optional<Vector<Synchronization>> per_dof_synchronization; // Sets the synchronization for each DoF individually, overwrites global synchronization
 ```
 
 On top of the current state, target state, and constraints, Ruckig allows for a few more advanced settings:
 - A *minimum* velocity and acceleration can be specified - these should be a negative number. If they are not given, the negative maximum velocity or acceleration will be used (similar to the jerk limit). For example, this might be useful in human robot collaboration settings with a different velocity limit towards a human. Or, when switching between different moving coordinate frames like picking from a conveyer belt.
+- You can overwrite the global kinematic limits to specify limits for each section between two waypoints separately by using e.g. `per_section_max_velocity`.
 - If a DoF is not *enabled*, it will be ignored in the calculation. Ruckig will output a trajectory with constant acceleration for those DoFs.
 - A *minimum duration* can be optionally given. Note that Ruckig can not guarantee an exact, but only a minimum duration of the trajectory.
 - The control interface (position or velocity control) can be switched easily. For example, a stop trajectory or visual servoing can be easily implemented with the velocity interface.
-- Different synchronization behaviors (i.a. phase, time, or no synchonization) are implemented.
+- Different synchronization behaviors (i.a. phase, time, or no synchonization) are implemented. Phase synchronization results in straight-line motions.
 - The trajectory duration might be constrained to a multiple of the control cycle. This way, the *exact* state can be reached at a control loop execution.
 
-We refer to the [API documentation](https://pantor.github.io/ruckig/namespaceruckig.html) of the enumerations within the `ruckig` namespace for all available options.
+We refer to the [API documentation](https://docs.ruckig.com/namespaceruckig.html) of the enumerations within the `ruckig` namespace for all available options.
 
 
 ### Input Validation
 
-Note that there are range constraints of the input due to numerical reasons, see below for more details. To check the input before a calculation step,
+To check that Ruckig is able to generate a trajectory before the actual calculation step,
 ```.cpp
-ruckig.validate_input(input); // returns boolean
+ruckig.validate_input(input, check_current_state_within_limits=false, check_target_state_within_limits=true);
+// returns boolean
 ```
-returns `false` if an input is not valid. Of course, the target state needs to be within the given kinematic limits. Additionally, the target acceleration needs to fulfil
+returns `false` if an input is not valid. The two boolean arguments check that the current or target state are within the limits. The check includes a typical catch of jerk-limited trajectory generation: When the current state is at maximal velocity, any positive acceleration will inevitable lead to a velocity violation *at a future timestep*. In general, this condition is fulfilled when
 ```
-Abs(target_acceleration) <= Sqrt(2 * max_jerk * (max_velocity - Abs(target_velocity)))
+Abs(acceleration) <= Sqrt(2 * max_jerk * (max_velocity - Abs(velocity))).
 ```
+If both arguments are set to true, the calculated trajectory is guaranteed to be *within the kinematic limits throughout* its duration. Also, note that there are range constraints of the input due to numerical reasons, see below for more details.
+
 
 ### Result Type
 
@@ -159,6 +195,7 @@ Finished                        | 1
 Error                           | -1
 ErrorInvalidInput               | -100
 ErrorTrajectoryDuration         | -101
+ErrorPositionalLimits           | -102
 ErrorExecutionTimeCalculation   | -110
 ErrorSynchronizationCalculation | -111
 
@@ -172,11 +209,15 @@ Vector new_position;
 Vector new_velocity;
 Vector new_acceleration;
 
-bool new_calculation; // Whether a new calculation was performed in the last cycle
-double calculation_duration; // Duration of the calculation in the last cycle [µs]
-
 Trajectory trajectory; // The current trajectory
 double time; // The current, auto-incremented time. Reset to 0 at a new calculation.
+
+size_t new_section; // Index of the section between two (possibly filtered) intermediate positions.
+bool did_section_change; // Was a new section reached in the last cycle?
+
+bool new_calculation; // Whether a new calculation was performed in the last cycle
+bool was_calculation_interrupted; // Was the trajectory calculation interrupted? (only in Pro Version)
+double calculation_duration; // Duration of the calculation in the last cycle [µs]
 ```
 Moreover, the **trajectory** class has a range of useful parameters and methods.
 
@@ -187,7 +228,16 @@ std::array<double, DOFs> independent_min_durations; // Time-optimal profile for 
 <...> at_time(double time); // Get the kinematic state of the trajectory at a given time
 <...> get_position_extrema(); // Returns information about the position extrema and their times
 ```
-Again, we refer to the [API documentation](https://pantor.github.io/ruckig/) for the exact signatures.
+Again, we refer to the [API documentation](https://docs.ruckig.com) for the exact signatures.
+
+
+### Offline Calculation
+
+Ruckig also supports an offline approach for calculating a trajectory:
+```.cpp
+result = ruckig.calculate(input, trajectory);
+```
+When only using this method, the `Ruckig` constructor does not need a control cycle as an argument.
 
 
 ### Dynamic Number of Degrees of Freedom
@@ -203,16 +253,6 @@ OutputParameter<DynamicDOFs> output {6};
 However, we recommend to keep the template parameter when possible: First, it has a performance benefit of a few percent. Second, it is convenient for real-time programming due to its easier handling of memory allocations. When using dynamic degrees of freedom, make sure to allocate the memory of all vectors beforehand.
 
 
-### Offline Calculation
-
-Ruckig also supports an offline approach for calculating a trajectory:
-```.cpp
-result = ruckig.calculate(input, trajectory);
-```
-When only using this method, the `Ruckig` constructor does not need a control cycle as an argument.
-
-
-
 ## Tests and Numerical Stability
 
 The current test suite validates over 5.000.000.000 random trajectories. The numerical exactness is tested for the final position and final velocity to be within `1e-8`, for the final acceleration to be within `1e-10`, and for the velocity, acceleration and jerk limit to be within of a numerical error of `1e-12`. These are absolute values - we suggest to scale your input so that these correspond to your required precision of the system. For example, for most real-world systems we suggest to use input values in `[m]` (instead of e.g. `[mm]`), as `1e-8m` is sufficient precise for practical trajectory generation. Furthermore, all kinematic limits should be below `1e12`. The maximal supported trajectory duration is `7e3`, which again should suffice for most applications seeking for time-optimality. Note that Ruckig will also output values outside of this range, there is however no guarantee for correctness.
@@ -220,9 +260,14 @@ The current test suite validates over 5.000.000.000 random trajectories. The num
 
 ## Benchmark
 
-We find that Ruckig is more than twice as fast as Reflexxes Type IV and well-suited for control cycles as low as half a millisecond.
+We find that Ruckig is more than twice as fast as Reflexxes Type IV for state-to-state motions and well-suited for control cycles as low as 250 microseconds. The Ruckig *Community Version* is in general a more powerful and open-source alternative to the [Reflexxes Type IV](http://reflexxes.ws/) library. In fact, Ruckig is the first Type V trajectory generator for arbitrary target states and even supports directional velocity and acceleration limits, while also being faster on top.
 
 ![Benchmark](https://github.com/pantor/ruckig/raw/master/doc/benchmark.png?raw=true)
+
+For trajectories with intermediate waypoints, we compare Ruckig to [Toppra](https://github.com/hungpham2511/toppra), a state-of-the-art library for robotic motion planning. Ruckig is able to improve the trajectory duration on average by around 10%, as the path planning and time parametrization are calculated jointly. Moreover, Ruckig is real-time capable and supports jerk-constraints.
+
+![Benchmark](https://github.com/pantor/ruckig/raw/master/doc/ruckig_toppra_example.png?raw=true)
+
 
 
 ## Development
@@ -232,14 +277,13 @@ Ruckig is written in C++17. It is continuously tested on `ubuntu-latest`, `macos
 - Doctest v2.4 (only for testing)
 - Pybind11 v2.6 (only for python wrapper)
 
-If you still need to use C++11, you can patch Ruckig by calling `sh patch-c++11.sh`. Note that this will result in a performance drop of a few percent. Moreover, the Python module is not supported.
+If you still need to use C++11, you can patch the Ruckig *Community Version* by calling `sh scripts/patch-c++11.sh`. Note that this will result in a performance drop of a few percent. Moreover, the Python module is not supported.
 
 
-## Users
+## Used By
 
-Ruckig is used by:
 - [CoppeliaSim](https://www.coppeliarobotics.com/) in their upcoming release.
-- [MoveIt 2](https://github.com/ros-planning/moveit2/pull/571) for trajectory smoothing.
+- [MoveIt 2](https://moveit.ros.org) for trajectory smoothing.
 - [Struckig](https://github.com/stefanbesler/struckig), a port of Ruckig to Restructered Text for usage on PLCs.
 - [Frankx](https://github.com/pantor/frankx) for controlling the Franka Emika robot arm.
 - and others!

@@ -4,7 +4,7 @@
 
 namespace ruckig {
 
-VelocityStep2::VelocityStep2(double tf, double p0, double v0, double a0, double vf, double af, double aMax, double aMin, double jMax): p0(p0), v0(v0), a0(a0), tf(tf), vf(vf), af(af), _aMax(aMax), _aMin(aMin), _jMax(jMax)  { }
+VelocityStep2::VelocityStep2(double tf, double v0, double a0, double vf, double af, double aMax, double aMin, double jMax): v0(v0), a0(a0), tf(tf), vf(vf), af(af), _aMax(aMax), _aMin(aMin), _jMax(jMax)  { }
 
 bool VelocityStep2::time_acc0(Profile& profile, double aMax, double aMin, double jMax) {
     // UD Solution 1/2
@@ -20,7 +20,7 @@ bool VelocityStep2::time_acc0(Profile& profile, double aMax, double aMin, double
         profile.t[6] = 0;
 
         if (profile.check_for_velocity_with_timing<JerkSigns::UDDU, Limits::ACC0>(tf, jMax, aMax, aMin)) {
-            profile.pf = profile.p[7];
+            profile.pf = profile.p.back();
             return true;
         }
     }
@@ -38,7 +38,7 @@ bool VelocityStep2::time_acc0(Profile& profile, double aMax, double aMin, double
         profile.t[6] = 0;
 
         if (profile.check_for_velocity_with_timing<JerkSigns::UDUD, Limits::ACC0>(tf, jMax, aMax, aMin)) {
-            profile.pf = profile.p[7];
+            profile.pf = profile.p.back();
             return true;
         }
     }
@@ -57,7 +57,7 @@ bool VelocityStep2::time_none(Profile& profile, double aMax, double aMin, double
         profile.t[6] = 0;
 
         if (profile.check_for_velocity_with_timing<JerkSigns::UDDU, Limits::NONE>(0, jMax, aMax, aMin)) {
-            profile.pf = profile.p[7];
+            profile.pf = profile.p.back();
             return true;
         }
     }
@@ -75,7 +75,7 @@ bool VelocityStep2::time_none(Profile& profile, double aMax, double aMin, double
         double jf = (a0 - af)*(a0 - af)/(2*(af*tf + v0 - vf));
 
         if (std::abs(jf) < std::abs(jMax) + 1e-12 && profile.check_for_velocity_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jf, aMax, aMin)) {
-            profile.pf = profile.p[7];
+            profile.pf = profile.p.back();
             return true;
         }
     }
@@ -84,8 +84,6 @@ bool VelocityStep2::time_none(Profile& profile, double aMax, double aMin, double
 }
 
 bool VelocityStep2::get_profile(Profile& profile) {
-    profile.set_boundary(p0, v0, a0, vf, af);
-
     // Test all cases to get ones that match
     // However we should guess which one is correct and try them first...
     if (vf > v0) {
