@@ -4,7 +4,7 @@
 
 namespace ruckig {
 
-PositionStep2::PositionStep2(double tf, double p0, double v0, double a0, double pf, double vf, double af, double vMax, double vMin, double aMax, double aMin, double jMax): p0(p0), v0(v0), a0(a0), tf(tf), pf(pf), vf(vf), af(af), _vMax(vMax), _vMin(vMin), _aMax(aMax), _aMin(aMin), _jMax(jMax)  {
+PositionStep2::PositionStep2(double tf, double p0, double v0, double a0, double pf, double vf, double af, double vMax, double vMin, double aMax, double aMin, double jMax): v0(v0), a0(a0), tf(tf), vf(vf), af(af), _vMax(vMax), _vMin(vMin), _aMax(aMax), _aMin(aMin), _jMax(jMax)  {
     pd = pf - p0;
     tf_tf = tf * tf;
     tf_p3 = tf_tf * tf;
@@ -79,11 +79,11 @@ bool PositionStep2::time_acc1_vel(Profile& profile, double vMax, double vMin, do
         const double ph2 = 2*aMin*(jMax*g1 + af*vd) - aMin*aMin*vd + jMax*vd_vd;
         const double ph3 = af_af + aMin*(aMin - 2*af) - 2*jMax*(vd - aMin*tf);
 
-        std::array<double, 5> polynom;
-        polynom[1] = (2*(2*a0 - aMin))/jMax;
-        polynom[2] = (4*a0_a0 + ph1 - 3*a0*aMin)/jMax_jMax;
-        polynom[3] = (2*a0*ph1)/(jMax_jMax*jMax);
-        polynom[4] = (3*(a0_p4 + af_p4) - 4*(a0_p3 + 2*af_p3)*aMin + 6*af_af*(aMin*aMin - 2*jMax*vd) + 12*jMax*ph2 + 6*a0_a0*ph3)/(12*jMax_jMax*jMax_jMax);
+        std::array<double, 4> polynom;
+        polynom[0] = (2*(2*a0 - aMin))/jMax;
+        polynom[1] = (4*a0_a0 + ph1 - 3*a0*aMin)/jMax_jMax;
+        polynom[2] = (2*a0*ph1)/(jMax_jMax*jMax);
+        polynom[3] = (3*(a0_p4 + af_p4) - 4*(a0_p3 + 2*af_p3)*aMin + 6*af_af*(aMin*aMin - 2*jMax*vd) + 12*jMax*ph2 + 6*a0_a0*ph3)/(12*jMax_jMax*jMax_jMax);
 
         const double t_min = -a0/jMax;
         const double t_max = std::min((tf + 2*aMin/jMax - (a0 + af)/jMax)/2, (aMax - a0)/jMax);
@@ -126,11 +126,11 @@ bool PositionStep2::time_acc1_vel(Profile& profile, double vMax, double vMin, do
         const double ph3 = af_af + ph2 - 2*aMax*(af + jMax*tf);
         const double ph4 = 2*aMax*jMax*g1 + aMax*aMax*vd + jMax*vd_vd;
 
-        std::array<double, 5> polynom;
-        polynom[1] = (4*a0 - 2*aMax)/jMax;
-        polynom[2] = (4*a0_a0 - 3*a0*aMax + ph1)/jMax_jMax;
-        polynom[3] = (2*a0*ph1)/(jMax_jMax*jMax);
-        polynom[4] = (3*(a0_p4 + af_p4) - 4*(a0_p3 + 2*af_p3)*aMax - 24*af*aMax*jMax*vd + 12*jMax*ph4 - 6*a0_a0*ph3 + 6*af_af*ph2)/(12*jMax_jMax*jMax_jMax);
+        std::array<double, 4> polynom;
+        polynom[0] = (4*a0 - 2*aMax)/jMax;
+        polynom[1] = (4*a0_a0 - 3*a0*aMax + ph1)/jMax_jMax;
+        polynom[2] = (2*a0*ph1)/(jMax_jMax*jMax);
+        polynom[3] = (3*(a0_p4 + af_p4) - 4*(a0_p3 + 2*af_p3)*aMax - 24*af*aMax*jMax*vd + 12*jMax*ph4 - 6*a0_a0*ph3 + 6*af_af*ph2)/(12*jMax_jMax*jMax_jMax);
 
         const double t_min = -a0/jMax;
         const double t_max = std::min((tf + ad/jMax - 2*aMax/jMax)/2, (aMax - a0)/jMax);
@@ -169,11 +169,11 @@ bool PositionStep2::time_acc0_vel(Profile& profile, double vMax, double vMin, do
 
     // Profile UDDU
     {
-        std::array<double, 5> polynom;
-        polynom[1] = (2*aMax)/jMax;
-        polynom[2] = (a0_a0 - af_af + 2*ad*aMax + aMax*aMax + 2*jMax*(vd - aMax*tf))/jMax_jMax;
-        polynom[3] = 0;
-        polynom[4] = -(-3*(a0_p4 + af_p4) + 4*(af_p3 + 2*a0_p3)*aMax - 12*a0*aMax*(af_af - 2*jMax*vd) + 6*a0_a0*(af_af - aMax*aMax - 2*jMax*vd) + 6*af_af*(aMax*aMax - 2*aMax*jMax*tf + 2*jMax*vd) + ph1)/(12*jMax_jMax*jMax_jMax);
+        std::array<double, 4> polynom;
+        polynom[0] = (2*aMax)/jMax;
+        polynom[1] = (a0_a0 - af_af + 2*ad*aMax + aMax*aMax + 2*jMax*(vd - aMax*tf))/jMax_jMax;
+        polynom[2] = 0;
+        polynom[3] = -(-3*(a0_p4 + af_p4) + 4*(af_p3 + 2*a0_p3)*aMax - 12*a0*aMax*(af_af - 2*jMax*vd) + 6*a0_a0*(af_af - aMax*aMax - 2*jMax*vd) + 6*af_af*(aMax*aMax - 2*aMax*jMax*tf + 2*jMax*vd) + ph1)/(12*jMax_jMax*jMax_jMax);
 
         const double t_min = -af/jMax;
         const double t_max = std::min(tf - (2*aMax - a0)/jMax, -aMin/jMax);
@@ -211,11 +211,11 @@ bool PositionStep2::time_acc0_vel(Profile& profile, double vMax, double vMin, do
 
     // Profile UDUD
     {
-        std::array<double, 5> polynom;
-        polynom[1] = (-2*aMax)/jMax;
-        polynom[2] = -(a0_a0 + af_af - 2*(a0 + af)*aMax + aMax*aMax + 2*jMax*(vd - aMax*tf))/jMax_jMax;
-        polynom[3] = 0;
-        polynom[4] = (3*(a0_p4 + af_p4) - 4*(af_p3 + 2*a0_p3)*aMax + 6*a0_a0*(af_af + aMax*aMax + 2*jMax*vd) - 12*a0*aMax*(af_af + 2*jMax*vd) + 6*af_af*(aMax*aMax - 2*aMax*jMax*tf + 2*jMax*vd) - ph1)/(12*jMax_jMax*jMax_jMax);
+        std::array<double, 4> polynom;
+        polynom[0] = (-2*aMax)/jMax;
+        polynom[1] = -(a0_a0 + af_af - 2*(a0 + af)*aMax + aMax*aMax + 2*jMax*(vd - aMax*tf))/jMax_jMax;
+        polynom[2] = 0;
+        polynom[3] = (3*(a0_p4 + af_p4) - 4*(af_p3 + 2*a0_p3)*aMax + 6*a0_a0*(af_af + aMax*aMax + 2*jMax*vd) - 12*a0*aMax*(af_af + 2*jMax*vd) + 6*af_af*(aMax*aMax - 2*aMax*jMax*tf + 2*jMax*vd) - ph1)/(12*jMax_jMax*jMax_jMax);
 
         const double t_min = af/jMax;
         const double t_max = std::min(tf - aMax/jMax, aMax/jMax);
@@ -311,7 +311,7 @@ bool PositionStep2::time_vel(Profile& profile, double vMax, double vMin, double 
         std::array<double, 5> deriv = Roots::polyMonicDeri(polynom);
 
         // Solve 4th order derivative analytically
-        auto d_extremas = Roots::solveQuartMonic(deriv);
+        auto d_extremas = Roots::solveQuartMonic(deriv[1], deriv[2], deriv[3], deriv[4]);
 
         Roots::Set<double, 5> roots;
         double tz_current {tz_min};
@@ -391,7 +391,7 @@ bool PositionStep2::time_vel(Profile& profile, double vMax, double vMin, double 
         double dd_tz_current {tz_min};
         Roots::Set<std::pair<double, double>, 6> dd_tz_intervals;
 
-        auto dd_extremas = Roots::solveQuartMonic(dderiv);
+        auto dd_extremas = Roots::solveQuartMonic(dderiv[1], dderiv[2], dderiv[3], dderiv[4]);
         for (double tz: dd_extremas) {
             if (tz >= tz_max) {
                 continue;
@@ -472,12 +472,12 @@ bool PositionStep2::time_vel(Profile& profile, double vMax, double vMin, double 
 
 bool PositionStep2::time_acc0_acc1(Profile& profile, double vMax, double vMin, double aMax, double aMin, double jMax) {
     if (std::abs(a0) < DBL_EPSILON && std::abs(af) < DBL_EPSILON) {
-        const double h1 = 2*aMin*(-pd + tf*v0) + vd_vd + aMax*(2*pd + aMin*tf_tf - 2*tf*vf);
+        const double h1 = 2*aMin*g1 + vd_vd + aMax*(2*pd + aMin*tf_tf - 2*tf*vf);
         const double h2 = ((aMax - aMin)*(-aMin*vd + aMax*(aMin*tf - vd)));
 
         const double jf = h2/h1;
         profile.t[0] = aMax/jf;
-        profile.t[1] = (-2*aMax*h1 + aMin*aMin*(-2*pd + tf*(v0 + vf)))/h2;
+        profile.t[1] = (-2*aMax*h1 + aMin*aMin*g2)/h2;
         profile.t[2] = profile.t[0];
         profile.t[3] = 0;
         profile.t[4] = -aMin/jf;
@@ -487,11 +487,27 @@ bool PositionStep2::time_acc0_acc1(Profile& profile, double vMax, double vMin, d
         return profile.check_with_timing<JerkSigns::UDDU, Limits::ACC0_ACC1>(tf, jf, vMax, vMin, aMax, aMin, jMax);
     }
 
+    // Profile UDDU, Solution 1
+    // {
+    //     profile.t[0] = (-a0 + aMax)/jMax;
+    //     profile.t[1] = -((af_af - a0_a0)/2 + aMax*aMax + aMin*aMin - ad*aMin - 2*aMax*aMin + jMax*(aMin*tf - vd))/((aMax - aMin)*jMax);
+    //     profile.t[2] = aMax/jMax;
+    //     profile.t[3] = 0;
+    //     profile.t[4] = -aMin/jMax;
+    //     profile.t[5] = tf - (profile.t[0] + profile.t[1] + profile.t[2] + profile.t[3] + 2*profile.t[4] + af/jMax);
+    //     profile.t[6] = profile.t[4] + af/jMax;
+
+    //     if (profile.check_with_timing<JerkSigns::UDDU, Limits::ACC0_ACC1>(tf, jMax, vMax, vMin, aMax, aMin)) {
+    //         std::cout << "f2" << std::endl;
+    //         return true;
+    //     }
+    // }
+
     // UDDU
     {
-        const double h1 = Sqrt(144*Power2((aMax - aMin)*(-aMin*vd + aMax*(aMin*tf - vd)) - af_af*(aMax*tf - vd) + 2*af*aMin*(aMax*tf - vd) + a0_a0*(aMin*tf + v0 - vf) - 2*a0*aMax*(aMin*tf - vd)) + 48*ad*(3*a0_p3 - 3*af_p3 + 12*aMax*aMin*(-aMax + aMin) + 4*af_af*(aMax + 2*aMin) + a0*(-3*af_af + 8*af*(aMin - aMax) + 6*(aMax*aMax + 2*aMax*aMin - aMin*aMin)) + 6*af*(aMax*aMax - 2*aMax*aMin - aMin*aMin) + a0_a0*(3*af - 4*(2*aMax + aMin)))*(2*aMin*(-pd + tf*v0) + vd*vd + aMax*(2*pd + aMin*tf*tf - 2*tf*vf)));
+        const double h1 = Sqrt(144*Power2((aMax - aMin)*(-aMin*vd + aMax*(aMin*tf - vd)) - af_af*(aMax*tf - vd) + 2*af*aMin*(aMax*tf - vd) + a0_a0*(aMin*tf + v0 - vf) - 2*a0*aMax*(aMin*tf - vd)) + 48*ad*(3*a0_p3 - 3*af_p3 + 12*aMax*aMin*(-aMax + aMin) + 4*af_af*(aMax + 2*aMin) + a0*(-3*af_af + 8*af*(aMin - aMax) + 6*(aMax*aMax + 2*aMax*aMin - aMin*aMin)) + 6*af*(aMax*aMax - 2*aMax*aMin - aMin*aMin) + a0_a0*(3*af - 4*(2*aMax + aMin)))*(2*aMin*g1 + vd*vd + aMax*(2*pd + aMin*tf*tf - 2*tf*vf)));
 
-        const double jf = -(3*af_af*aMax*tf - 3*a0_a0*aMin*tf - 6*ad*aMax*aMin*tf + 3*aMax*aMin*(aMin - aMax)*tf + 3*(a0_a0 - af_af)*vd + 6*vd*(af*aMin - a0*aMax) + 3*(aMax*aMax - aMin*aMin)*vd + h1/4)/(6*(2*aMin*(-pd + tf*v0) + vd*vd + aMax*(2*pd + aMin*tf_tf - 2*tf*vf)));
+        const double jf = -(3*af_af*aMax*tf - 3*a0_a0*aMin*tf - 6*ad*aMax*aMin*tf + 3*aMax*aMin*(aMin - aMax)*tf + 3*(a0_a0 - af_af)*vd + 6*vd*(af*aMin - a0*aMax) + 3*(aMax*aMax - aMin*aMin)*vd + h1/4)/(6*(2*aMin*g1 + vd*vd + aMax*(2*pd + aMin*tf_tf - 2*tf*vf)));
         profile.t[0] = (aMax - a0)/jf;
         profile.t[1] = (a0_a0 - af_af + 2*ad*aMin - 2*(aMax*aMax - 2*aMax*aMin + aMin*aMin + aMin*jf*tf - jf*vd))/(2*(aMax - aMin)*jf);
         profile.t[2] = aMax/jf;
@@ -505,21 +521,6 @@ bool PositionStep2::time_acc0_acc1(Profile& profile, double vMax, double vMin, d
         }
     }
 
-    // Profile UDDU, Solution 1
-    {
-        profile.t[0] = (-a0 + aMax)/jMax;
-        profile.t[1] = -((af_af - a0_a0)/2 + aMax*aMax + aMin*aMin - ad*aMin - 2*aMax*aMin + jMax*(aMin*tf - vd))/((aMax - aMin)*jMax);
-        profile.t[2] = aMax/jMax;
-        profile.t[3] = 0;
-        profile.t[4] = -aMin/jMax;
-        profile.t[5] = tf - (profile.t[0] + profile.t[1] + profile.t[2] + profile.t[3] + 2*profile.t[4] + af/jMax);
-        profile.t[6] = profile.t[4] + af/jMax;
-
-        if (profile.check_with_timing<JerkSigns::UDDU, Limits::ACC0_ACC1>(tf, jMax, vMax, vMin, aMax, aMin)) {
-            return true;
-        }
-    }
-
     return false;
 }
 
@@ -527,7 +528,7 @@ bool PositionStep2::time_acc1(Profile& profile, double vMax, double vMin, double
     // a3 != 0
     // Case UDDU
     {
-        const double h0 = Sqrt(jMax_jMax*(a0_p4 + af_p4 - 4*af_p3*jMax*tf + 6*af_af*jMax_jMax*tf_tf - 4*a0_p3*(af - jMax*tf) + 6*a0_a0*(af - jMax*tf)*(af - jMax*tf) + 24*af*jMax_jMax*(-pd + tf*v0) - 4*a0*(af_p3 - 3*af_af*jMax*tf + 6*jMax_jMax*(-pd + tf*vf)) - 12*jMax_jMax*(-vd_vd + jMax*tf*(-2*pd + tf*(v0 + vf))))/3)/jMax;
+        const double h0 = Sqrt(jMax_jMax*(a0_p4 + af_p4 - 4*af_p3*jMax*tf + 6*af_af*jMax_jMax*tf_tf - 4*a0_p3*(af - jMax*tf) + 6*a0_a0*(af - jMax*tf)*(af - jMax*tf) + 24*af*jMax_jMax*g1 - 4*a0*(af_p3 - 3*af_af*jMax*tf + 6*jMax_jMax*(-pd + tf*vf)) - 12*jMax_jMax*(-vd_vd + jMax*tf*g2))/3)/jMax;
         const double h1 = Sqrt((a0_a0 + af_af - 2*a0*af - 2*ad*jMax*tf + 2*h0)/jMax_jMax + tf_tf);
 
         profile.t[0] = -(a0_a0 + af_af + 2*a0*(jMax*tf - af) - 2*jMax*vd + h0)/(2*jMax*(-ad + jMax*tf));
@@ -545,7 +546,7 @@ bool PositionStep2::time_acc1(Profile& profile, double vMax, double vMin, double
 
     // Case UDUD
     {
-        const double h0 = Sqrt(jMax_jMax*(a0_p4 + af_p4 + 4*(af_p3 - a0_p3)*jMax*tf + 6*af_af*jMax_jMax*tf_tf + 6*a0_a0*(af + jMax*tf)*(af + jMax*tf) + 24*af*jMax_jMax*(-pd + tf*v0) - 4*a0*(a0_a0*af + af_p3 + 3*af_af*jMax*tf + 6*jMax_jMax*(-pd + tf*vf)) + 12*jMax_jMax*(vd_vd + jMax*tf*(-2*pd + tf*(v0 + vf))))/3)/jMax;
+        const double h0 = Sqrt(jMax_jMax*(a0_p4 + af_p4 + 4*(af_p3 - a0_p3)*jMax*tf + 6*af_af*jMax_jMax*tf_tf + 6*a0_a0*(af + jMax*tf)*(af + jMax*tf) + 24*af*jMax_jMax*g1 - 4*a0*(a0_a0*af + af_p3 + 3*af_af*jMax*tf + 6*jMax_jMax*(-pd + tf*vf)) + 12*jMax_jMax*(vd_vd + jMax*tf*g2))/3)/jMax;
         const double h1 = Sqrt((a0_a0 + af_af - 2*a0*af + 2*ad*jMax*tf + 2*h0)/jMax_jMax + tf_tf);
 
         profile.t[0] = 0;
@@ -623,6 +624,26 @@ bool PositionStep2::time_acc0(Profile& profile, double vMax, double vMin, double
         }
     }
 
+    // UDUD
+    {
+        const double h0a = -a0_a0 + af_af - 2*ad*aMax + 2*jMax*(aMax*tf - vd);
+        const double h0b = a0_p3 + 2*af_p3 - 6*af_af*aMax - 3*a0_a0*(af - jMax*tf) - 3*a0*aMax*(aMax - 2*af + 2*jMax*tf) - 3*jMax*(jMax*(-2*pd + aMax*tf_tf + 2*tf*v0) + aMax*(aMax*tf - 2*vd)) + 3*af*(aMax*aMax + 2*aMax*jMax*tf - 2*jMax*vd);
+        const double h0 = Abs(jMax)*Sqrt(4*h0b*h0b - 18*h0a*h0a*h0a);
+        const double h1 = 3*jMax*h0a;
+
+        profile.t[0] = (-a0 + aMax)/jMax;
+        profile.t[1] = (-a0_p3 + af_p3 + af_af*(-6*aMax + 3*jMax*tf) + a0_a0*(-3*af + 6*aMax + 3*jMax*tf) + 6*af*(aMax*aMax - jMax*vd) + 3*a0*(af_af - 2*(aMax*aMax + jMax*vd)) - 6*jMax*(aMax*(aMax*tf - 2*vd) + jMax*g2))/h1;
+        profile.t[2] = -(ad + h0/h1)/(2*jMax) + tf/2 - profile.t[1]/2;
+        profile.t[3] = h0/(jMax*h1);
+        profile.t[4] = 0;
+        profile.t[5] = 0;
+        profile.t[6] = tf - (profile.t[0] + profile.t[1] + profile.t[2] + profile.t[3]);
+
+        if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jMax, vMax, vMin, aMax, aMin)) {
+            return true;
+        }
+    }
+
     // a3 != 0
 
     // UDDU Solution 1
@@ -668,33 +689,34 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
 
     if (std::abs(a0) < DBL_EPSILON && std::abs(af) < DBL_EPSILON) {
         // Solution 1
-        {
-            const double h1 = Sqrt(16*pd*(pd - tf*(v0 + vf)) + tf_tf*(5*v0_v0 + 6*v0*vf + 5*vf_vf));
-            const double jf = 4*(4*pd - 2*tf*(v0 + vf) - h1)/tf_p3;
+        // {
+        //     const double h1 = Sqrt(16*pd*(pd - tf*(v0 + vf)) + tf_tf*(5*v0_v0 + 6*v0*vf + 5*vf_vf));
+        //     const double jf = 4*(4*pd - 2*tf*(v0 + vf) - h1)/tf_p3;
 
-            profile.t[0] = (tf*(v0 + 3*vf) - 4*pd)/(4*vd);
-            profile.t[1] = 0;
-            profile.t[2] = tf/2;
-            profile.t[3] = 0;
-            profile.t[4] = 0;
-            profile.t[5] = 0;
-            profile.t[6] = profile.t[4];
+        //     profile.t[0] = (tf*(v0 + 3*vf) - 4*pd)/(4*vd);
+        //     profile.t[1] = 0;
+        //     profile.t[2] = tf/2;
+        //     profile.t[3] = 0;
+        //     profile.t[4] = 0;
+        //     profile.t[5] = 0;
+        //     profile.t[6] = profile.t[4];
 
-            if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jf, vMax, vMin, aMax, aMin, jMax)) {
-                return true;
-            }
-        }
+        //     if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jf, vMax, vMin, aMax, aMin, jMax)) {
+        //         std::cout << "i2" << std::endl;
+        //         return true;
+        //     }
+        // }
 
         // Is that really needed?
         // Profiles with a3 != 0, Solution UDDU
         {
             // First acc, then constant
             {
-                std::array<double, 5> polynom;
-                polynom[1] = -2*tf;
-                polynom[2] = 2*vd/jMax + tf_tf;
-                polynom[3] = 4*(pd - tf*vf)/jMax;
-                polynom[4] = (vd_vd + jMax*tf*g2)/(jMax_jMax);
+                std::array<double, 4> polynom;
+                polynom[0] = -2*tf;
+                polynom[1] = 2*vd/jMax + tf_tf;
+                polynom[2] = 4*(pd - tf*vf)/jMax;
+                polynom[3] = (vd_vd + jMax*tf*g2)/(jMax_jMax);
 
                 auto roots = Roots::solveQuartMonic(polynom);
                 for (double t: roots) {
@@ -725,54 +747,12 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
                     }
                 }
             }
-
-            // First constant, then acc
-            {
-                const double ph1 = -jMax*(jMax*tf_tf + 4*vd);
-
-                std::array<double, 5> polynom;
-                polynom[1] = 2*jMax*(-4*pd + tf*(jMax*tf_tf - 2*v0 + 6*vf))/ph1;
-                polynom[2] = -(jMax_jMax*tf_p4 - 8*vd_vd + 4*jMax*tf*(-3*pd + tf*v0 + 2*tf*vf))/ph1;
-                polynom[3] = 4*(jMax*tf_tf*g1 - vd*(-2*pd - tf*v0 + 3*tf*vf))/ph1;
-                polynom[4] = -4*(jMax*g1*g1 + vd_vd*vd)/(jMax*ph1);
-
-                auto roots = Roots::solveQuartMonic(polynom);
-                for (double t: roots) {
-                    if (t > tf || t > (aMax - aMin)/jMax) {
-                        continue;
-                    }
-
-                    // Single Newton step (regarding pd)
-                    {
-                        const double h1 = Sqrt((jMax*t*(t - tf) - vd)/jMax);
-                        const double orig = (-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0)/2 - (h1*h1*h1)/jMax - t*(jMax*t*(t - tf) - vd);
-                        const double deriv = (jMax*(-2*t + tf)*(6*h1 - 2*tf) - 4*jMax*t*(3*t - 2*tf))/4 + vd;
-
-                        t -= orig / deriv;
-                    }
-
-                    const double h1 = Sqrt((jMax*t*(t - tf) - vd)/jMax);
-
-                    // Solution 2 with aPlat
-                    profile.t[0] = 0;
-                    profile.t[1] = 0;
-                    profile.t[2] = t;
-                    profile.t[3] = tf - 2*t - 2*h1;
-                    profile.t[4] = h1;
-                    profile.t[5] = 0;
-                    profile.t[6] = tf - (t + profile.t[3] + profile.t[4]);
-
-                    if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jMax, vMax, vMin, aMax, aMin)) {
-                        return true;
-                    }
-                }
-            }
         }
     }
 
     // UDUD T 0246
     {
-        const double h0 = Sqrt(2*jMax_jMax*(2*Power2(a0_p3 - af_p3 - 3*af_af*jMax*tf + 9*af*jMax_jMax*tf_tf - 3*a0_a0*(af + jMax*tf) + 3*a0*Power2(af + jMax*tf) + 3*jMax_jMax*(8*pd + jMax*tf_tf*tf - 8*tf*vf)) - 3*(a0_a0 + af_af - 2*af*jMax*tf - 2*a0*(af + jMax*tf) - jMax*(jMax*tf_tf + 4*v0 - 4*vf))*(a0_p4 + af_p4 + 4*af_p3*jMax*tf + 6*af_af*jMax_jMax*tf_tf - 3*jMax_jMax*jMax_jMax*tf_tf*tf_tf - 4*a0_p3*(af + jMax*tf) + 6*a0_a0*Power2(af + jMax*tf) - 12*af*jMax_jMax*(8*pd + jMax*tf_tf*tf - 8*tf*v0) + 48*jMax_jMax*vd_vd + 48*jMax_jMax*jMax*tf*(-2*pd + tf*(v0 + vf)) - 4*a0*(af_p3 + 3*af_af*jMax*tf - 9*af*jMax_jMax*tf_tf - 3*jMax_jMax*(8*pd + jMax*tf_tf*tf - 8*tf*vf)))))/jMax;
+        const double h0 = Sqrt(2*jMax_jMax*(2*Power2(a0_p3 - af_p3 - 3*af_af*jMax*tf + 9*af*jMax_jMax*tf_tf - 3*a0_a0*(af + jMax*tf) + 3*a0*Power2(af + jMax*tf) + 3*jMax_jMax*(8*pd + jMax*tf_tf*tf - 8*tf*vf)) - 3*(a0_a0 + af_af - 2*af*jMax*tf - 2*a0*(af + jMax*tf) - jMax*(jMax*tf_tf + 4*v0 - 4*vf))*(a0_p4 + af_p4 + 4*af_p3*jMax*tf + 6*af_af*jMax_jMax*tf_tf - 3*jMax_jMax*jMax_jMax*tf_tf*tf_tf - 4*a0_p3*(af + jMax*tf) + 6*a0_a0*Power2(af + jMax*tf) - 12*af*jMax_jMax*(8*pd + jMax*tf_tf*tf - 8*tf*v0) + 48*jMax_jMax*vd_vd + 48*jMax_jMax*jMax*tf*g2 - 4*a0*(af_p3 + 3*af_af*jMax*tf - 9*af*jMax_jMax*tf_tf - 3*jMax_jMax*(8*pd + jMax*tf_tf*tf - 8*tf*vf)))))/jMax;
         const double h1 = 12*jMax*(-a0_a0 - af_af + 2*af*jMax*tf + 2*a0*(af + jMax*tf) + jMax*(jMax*tf_tf + 4*v0 - 4*vf));
         const double h2 = -4*a0_p3 + 4*af_p3 + 12*a0_a0*af - 12*a0*af_af + 48*jMax_jMax*pd + 12*(a0_a0 - af_af)*jMax*tf - 24*jMax_jMax*tf*(v0 + vf) + 24*ad*jMax*vd;
         const double h3 = 2*a0_p3 - 2*af_p3 - 6*a0_a0*af + 6*a0*af_af;
@@ -796,11 +776,11 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
         {
             const double ph1 = af + jMax*tf;
 
-            std::array<double, 5> polynom;
-            polynom[1] = -2*(ad + jMax*tf)/jMax;
-            polynom[2] = 2*(a0_a0 + af_af + jMax*(af*tf + vd) - 2*a0*ph1)/jMax_jMax + tf_tf;
-            polynom[3] = 2*(a0_p3 - af_p3 - 3*af_af*jMax*tf + 3*a0*ph1*(ph1 - a0) - 6*jMax_jMax*(-pd + tf*vf))/(3*jMax_jMax*jMax);
-            polynom[4] = (a0_p4 + af_p4 + 4*af_p3*jMax*tf - 4*a0_p3*ph1 + 6*a0_a0*ph1*ph1 + 24*jMax_jMax*af*g1 - 4*a0*(af_p3 + 3*af_af*jMax*tf + 6*jMax_jMax*(-pd + tf*vf)) + 6*jMax_jMax*af_af*tf_tf + 12*jMax_jMax*(vd_vd + jMax*tf*g2))/(12*jMax_jMax*jMax_jMax);
+            std::array<double, 4> polynom;
+            polynom[0] = -2*(ad + jMax*tf)/jMax;
+            polynom[1] = 2*(a0_a0 + af_af + jMax*(af*tf + vd) - 2*a0*ph1)/jMax_jMax + tf_tf;
+            polynom[2] = 2*(a0_p3 - af_p3 - 3*af_af*jMax*tf + 3*a0*ph1*(ph1 - a0) - 6*jMax_jMax*(-pd + tf*vf))/(3*jMax_jMax*jMax);
+            polynom[3] = (a0_p4 + af_p4 + 4*af_p3*jMax*tf - 4*a0_p3*ph1 + 6*a0_a0*ph1*ph1 + 24*jMax_jMax*af*g1 - 4*a0*(af_p3 + 3*af_af*jMax*tf + 6*jMax_jMax*(-pd + tf*vf)) + 6*jMax_jMax*af_af*tf_tf + 12*jMax_jMax*(vd_vd + jMax*tf*g2))/(12*jMax_jMax*jMax_jMax);
 
             const double t_min = ad/jMax;
             const double t_max = std::min((aMax - a0)/jMax, (ad/jMax + tf) / 2);
@@ -840,12 +820,12 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
         {
             const double h1 = 3*jMax*(ad_ad + 2*jMax*(a0*tf - vd));
             const double h2 = ad_ad + 2*jMax*(a0*tf - vd);
-            const double h0 = Sqrt(4*Power2(2*(a0_p3 - af_p3) - 6*a0_a0*(af - jMax*tf) + 6*jMax_jMax*(-pd + tf*v0) + 3*a0*(2*af_af - 2*jMax*af*tf + jMax_jMax*tf_tf) + 6*ad*jMax*vd) - 18*h2*h2*h2)/h1 * Abs(jMax)/jMax;
+            const double h0 = Sqrt(4*Power2(2*(a0_p3 - af_p3) - 6*a0_a0*(af - jMax*tf) + 6*jMax_jMax*g1 + 3*a0*(2*af_af - 2*jMax*af*tf + jMax_jMax*tf_tf) + 6*ad*jMax*vd) - 18*h2*h2*h2)/h1 * Abs(jMax)/jMax;
 
             profile.t[0] = 0;
             profile.t[1] = 0;
             profile.t[2] = 0;
-            profile.t[3] = (af_p3 - a0_p3 + 3*(af_af - a0_a0)*jMax*tf - 3*ad*(a0*af + 2*jMax*vd) - 6*jMax_jMax*(-2*pd + tf*(v0 + vf)))/h1;
+            profile.t[3] = (af_p3 - a0_p3 + 3*(af_af - a0_a0)*jMax*tf - 3*ad*(a0*af + 2*jMax*vd) - 6*jMax_jMax*g2)/h1;
             profile.t[4] = (tf - profile.t[3] - h0)/2 - ad/(2*jMax);
             profile.t[5] = h0;
             profile.t[6] = (tf - profile.t[3] + ad/jMax - h0)/2;
@@ -864,11 +844,11 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
             const double ph5 = (5*af_p4 - 8*af_p3*jMax*tf - 12*af_af*jMax*(jMax*tf_tf + vd) + 24*af*jMax_jMax*(-2*pd + jMax*tf_p3 + 2*tf*vf) - 6*jMax_jMax*ph4);
             const double ph6 = -vd_vd + jMax*tf*(-2*pd + 3*tf*v0 - tf*vf) - af*g2;
 
-            std::array<double, 5> polynom;
-            polynom[1] = -(4*(a0_p3 - af_p3) - 12*a0_a0*(af - jMax*tf) + 6*a0*(2*af_af - 2*af*jMax*tf + jMax*(jMax*tf_tf - 2*vd)) + 6*af*jMax*(3*jMax*tf_tf + 2*vd) - 6*jMax_jMax*(-4*pd + jMax*tf_p3 - 2*tf*v0 + 6*tf*vf))/(3*jMax*ph1);
-            polynom[2] = -(-a0_p4 - af_p4 + 4*a0_p3*(af - jMax*tf) + a0_a0*(-6*af_af + 8*af*jMax*tf - 4*jMax*(jMax*tf_tf - vd)) + 2*af_af*jMax*(jMax*tf_tf + 2*vd) - 4*af*jMax_jMax*(-3*pd + jMax*tf_p3 + 2*tf*v0 + tf*vf) + jMax_jMax*(jMax_jMax*tf_p4 - 8*vd_vd + 4*jMax*tf*(-3*pd + tf*v0 + 2*tf*vf)) + 2*a0*(2*af_p3 - 2*af_af*jMax*tf + af*jMax*(-3*jMax*tf_tf - 4*vd) + jMax_jMax*(-6*pd + jMax*tf_p3 - 4*tf*v0 + 10*tf*vf)))/(jMax_jMax*ph1);
-            polynom[3] = -(a0_p5 - af_p5 + af_p4*jMax*tf - 5*a0_p4*(af - jMax*tf) + 2*a0_p3*ph3 + 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*jMax_jMax*af*ph6 - 2*a0_a0*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*(-2*pd - tf*v0 + 3*tf*vf)) - 12*jMax_jMax*jMax*ph2 + a0*ph5)/(3*jMax_jMax*jMax*ph1);
-            polynom[4] = -(-a0_p6 - af_p6 + 6*a0_p5*(af - jMax*tf) - 48*af_p3*jMax_jMax*g1 + 72*jMax_jMax*jMax*(jMax*g1*g1 + vd_vd*vd + 2*af*g1*vd) - 3*a0_p4*ph3 - 36*af_af*jMax_jMax*vd_vd + 6*af_p4*jMax*vd + 4*a0_p3*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*(-2*pd - tf*v0 + 3*tf*vf)) - 3*a0_a0*ph5 + 6*a0*(af_p5 - af_p4*jMax*tf - 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*jMax_jMax*(-af*ph6 + jMax*ph2)))/(18*jMax_jMax*jMax_jMax*ph1);
+            std::array<double, 4> polynom;
+            polynom[0] = -(4*(a0_p3 - af_p3) - 12*a0_a0*(af - jMax*tf) + 6*a0*(2*af_af - 2*af*jMax*tf + jMax*(jMax*tf_tf - 2*vd)) + 6*af*jMax*(3*jMax*tf_tf + 2*vd) - 6*jMax_jMax*(-4*pd + jMax*tf_p3 - 2*tf*v0 + 6*tf*vf))/(3*jMax*ph1);
+            polynom[1] = -(-a0_p4 - af_p4 + 4*a0_p3*(af - jMax*tf) + a0_a0*(-6*af_af + 8*af*jMax*tf - 4*jMax*(jMax*tf_tf - vd)) + 2*af_af*jMax*(jMax*tf_tf + 2*vd) - 4*af*jMax_jMax*(-3*pd + jMax*tf_p3 + 2*tf*v0 + tf*vf) + jMax_jMax*(jMax_jMax*tf_p4 - 8*vd_vd + 4*jMax*tf*(-3*pd + tf*v0 + 2*tf*vf)) + 2*a0*(2*af_p3 - 2*af_af*jMax*tf + af*jMax*(-3*jMax*tf_tf - 4*vd) + jMax_jMax*(-6*pd + jMax*tf_p3 - 4*tf*v0 + 10*tf*vf)))/(jMax_jMax*ph1);
+            polynom[2] = -(a0_p5 - af_p5 + af_p4*jMax*tf - 5*a0_p4*(af - jMax*tf) + 2*a0_p3*ph3 + 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*jMax_jMax*af*ph6 - 2*a0_a0*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*(-2*pd - tf*v0 + 3*tf*vf)) - 12*jMax_jMax*jMax*ph2 + a0*ph5)/(3*jMax_jMax*jMax*ph1);
+            polynom[3] = -(-a0_p6 - af_p6 + 6*a0_p5*(af - jMax*tf) - 48*af_p3*jMax_jMax*g1 + 72*jMax_jMax*jMax*(jMax*g1*g1 + vd_vd*vd + 2*af*g1*vd) - 3*a0_p4*ph3 - 36*af_af*jMax_jMax*vd_vd + 6*af_p4*jMax*vd + 4*a0_p3*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*(-2*pd - tf*v0 + 3*tf*vf)) - 3*a0_a0*ph5 + 6*a0*(af_p5 - af_p4*jMax*tf - 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*jMax_jMax*(-af*ph6 + jMax*ph2)))/(18*jMax_jMax*jMax_jMax*ph1);
 
             const double t_max = (a0 - aMin)/jMax;
 
@@ -880,10 +860,11 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
 
                 // Single Newton step (regarding pd)
                 {
-                    const double h1 = (ad_ad + 2*jMax*(af*t + (jMax*t - a0)*(t - tf) - vd))/2;
-                    const double h2 = (-ad + jMax*(-2*t + tf));
-                    const double orig = (af_p3 - a0_p3 + 3*af*jMax*t*(af + jMax*t) + 3*a0_a0*(af + jMax*t) - 3*a0*(af_af + 2*af*jMax*t + jMax_jMax*(t*t - tf_tf)) + 3*jMax_jMax*(-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0))/(6*jMax_jMax) - std::pow(h1,1.5)/(jMax*Abs(jMax)) + ((-ad - jMax*t)*h1)/(jMax_jMax);
-                    const double deriv = (6*jMax*h2*Sqrt(h1)/Abs(jMax) + 2*(-ad - jMax*tf)*h2 - 2*(3*ad_ad + af*jMax*(8*t - 2*tf) + 4*a0*jMax*(-2*t + tf) + 2*jMax*(jMax*t*(3*t - 2*tf) - vd)))/(4*jMax);
+                    const double h1 = ad_ad/2 + jMax*(af*t + (jMax*t - a0)*(t - tf) - vd);
+                    const double h2 = -ad + jMax*(tf - 2*t);
+                    const double h3 = Sqrt(h1);
+                    const double orig = (af_p3 - a0_p3 + 3*af*jMax*t*(af + jMax*t) + 3*a0_a0*(af + jMax*t) - 3*a0*(af_af + 2*af*jMax*t + jMax_jMax*(t*t - tf_tf)) + 3*jMax_jMax*(-2*pd + jMax*t*(t - tf)*tf + 2*tf*v0))/(6*jMax_jMax) - h3*h3*h3/(jMax*Abs(jMax)) + ((-ad - jMax*t)*h1)/(jMax_jMax);
+                    const double deriv = (6*jMax*h2*h3/Abs(jMax) + 2*(-ad - jMax*tf)*h2 - 2*(3*ad_ad + af*jMax*(8*t - 2*tf) + 4*a0*jMax*(-2*t + tf) + 2*jMax*(jMax*t*(3*t - 2*tf) - vd)))/(4*jMax);
 
                     t -= orig / deriv;
                 }
@@ -919,11 +900,11 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
             const double ph6 = -vd_vd + jMax*tf*(-2*pd + 3*tf*v0 - tf*vf);
             const double ph7 = 3*jMax_jMax*ph1*ph1;
 
-            std::array<double, 5> polynom;
-            polynom[1] = (4*af*tf - 2*jMax*tf_tf - 4*vd)/ph1;
-            polynom[2] = (-2*(a0_p4 + af_p4) + 8*af_p3*jMax*tf + 6*af_af*jMax_jMax*tf_tf + 8*a0_p3*(af - jMax*tf) - 12*a0_a0*(af - jMax*tf)*(af - jMax*tf) - 12*af*jMax_jMax*(-pd + jMax*tf_p3 - 2*tf*v0 + 3*tf*vf) + 2*a0*(4*af_p3 - 12*af_af*jMax*tf + 9*af*jMax_jMax*tf_tf - 3*jMax_jMax*(2*pd + jMax*tf_p3 - 2*tf*vf)) + 3*jMax_jMax*(jMax_jMax*tf_p4 + 4*vd_vd - 4*jMax*tf*(pd + tf*v0 - 2*tf*vf)))/ph7;
-            polynom[3] = (-a0_p5 + af_p5 - af_p4*jMax*tf + 5*a0_p4*(af - jMax*tf) - 2*a0_p3*ph3 - 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*af_af*jMax_jMax*g2 - 12*af*jMax_jMax*ph6 + 2*a0_a0*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*ph0) + 12*jMax_jMax*jMax*ph2 + a0*(-5*af_p4 + 8*af_p3*jMax*tf + 12*af_af*jMax*(jMax*tf_tf + vd) - 24*af*jMax_jMax*(-2*pd + jMax*tf_p3 + 2*tf*vf) + 6*jMax_jMax*ph4))/(jMax*ph7);
-            polynom[4] = -(a0_p6 + af_p6 - 6*a0_p5*(af - jMax*tf) + 48*af_p3*jMax_jMax*g1 - 72*jMax_jMax*jMax*(jMax*g1*g1 + vd_vd*vd + 2*af*g1*vd) + 3*a0_p4*ph3 - 6*af_p4*jMax*vd + 36*af_af*jMax_jMax*vd_vd - 4*a0_p3*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*ph0) + 3*a0_a0*ph5 - 6*a0*(af_p5 - af_p4*jMax*tf - 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*jMax_jMax*(af_af*g2 - af*ph6 + jMax*ph2)))/(6*jMax_jMax*ph7);
+            std::array<double, 4> polynom;
+            polynom[0] = (4*af*tf - 2*jMax*tf_tf - 4*vd)/ph1;
+            polynom[1] = (-2*(a0_p4 + af_p4) + 8*af_p3*jMax*tf + 6*af_af*jMax_jMax*tf_tf + 8*a0_p3*(af - jMax*tf) - 12*a0_a0*(af - jMax*tf)*(af - jMax*tf) - 12*af*jMax_jMax*(-pd + jMax*tf_p3 - 2*tf*v0 + 3*tf*vf) + 2*a0*(4*af_p3 - 12*af_af*jMax*tf + 9*af*jMax_jMax*tf_tf - 3*jMax_jMax*(2*pd + jMax*tf_p3 - 2*tf*vf)) + 3*jMax_jMax*(jMax_jMax*tf_p4 + 4*vd_vd - 4*jMax*tf*(pd + tf*v0 - 2*tf*vf)))/ph7;
+            polynom[2] = (-a0_p5 + af_p5 - af_p4*jMax*tf + 5*a0_p4*(af - jMax*tf) - 2*a0_p3*ph3 - 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*af_af*jMax_jMax*g2 - 12*af*jMax_jMax*ph6 + 2*a0_a0*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*ph0) + 12*jMax_jMax*jMax*ph2 + a0*(-5*af_p4 + 8*af_p3*jMax*tf + 12*af_af*jMax*(jMax*tf_tf + vd) - 24*af*jMax_jMax*(-2*pd + jMax*tf_p3 + 2*tf*vf) + 6*jMax_jMax*ph4))/(jMax*ph7);
+            polynom[3] = -(a0_p6 + af_p6 - 6*a0_p5*(af - jMax*tf) + 48*af_p3*jMax_jMax*g1 - 72*jMax_jMax*jMax*(jMax*g1*g1 + vd_vd*vd + 2*af*g1*vd) + 3*a0_p4*ph3 - 6*af_p4*jMax*vd + 36*af_af*jMax_jMax*vd_vd - 4*a0_p3*(5*af_p3 - 9*af_af*jMax*tf - 6*af*jMax*vd + 6*jMax_jMax*ph0) + 3*a0_a0*ph5 - 6*a0*(af_p5 - af_p4*jMax*tf - 4*af_p3*jMax*(jMax*tf_tf + vd) + 12*jMax_jMax*(af_af*g2 - af*ph6 + jMax*ph2)))/(6*jMax_jMax*ph7);
 
             auto roots = Roots::solveQuartMonic(polynom);
             for (double t: roots) {
@@ -949,12 +930,12 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
     }
 
     // 3 step profile (ak. UZD), sometimes missed because of numerical errors T 012
-    if (std::abs(af - a0) < DBL_EPSILON) {
-        const double h1 = Sqrt(4*(a0*tf - vd)/jMax + tf_tf);
+    {
+        const double h1 = Sqrt(-ad_ad + jMax*(2*(a0 + af)*tf - 4*vd + jMax*tf_tf)) / Abs(jMax);
 
-        profile.t[0] = (tf - h1)/2;
+        profile.t[0] = (tf - h1 + ad/jMax)/2;
         profile.t[1] = h1;
-        profile.t[2] = profile.t[0];
+        profile.t[2] = (tf - h1 - ad/jMax)/2;
         profile.t[3] = 0;
         profile.t[4] = 0;
         profile.t[5] = 0;
@@ -962,25 +943,6 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
 
         if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jMax, vMax, vMin, aMax, aMin)) {
             return true;
-        }
-
-    } else {
-        const double h1 = Abs(jMax)/jMax*Sqrt((3*(a0 + af)*tf - 2*vd)*(3*(a0 + af)*tf - 2*vd) + 24*ad*g2);
-        const double jf = (3*(a0_a0 - af_af)*tf + ad*(6*vd - h1))/(12*g2);
-        const double h2 = Abs(jMax)/jMax*Sqrt(-ad_ad + jf*(2*(a0 + af)*tf + jf*tf_tf - 4*vd));
-
-        if (std::isfinite(h1) && std::isfinite(h2)) {
-            profile.t[0] = (ad + h2)/(2*jf) + tf/2;
-            profile.t[1] = ad/jf + tf - 2*profile.t[0];
-            profile.t[2] = tf - (profile.t[0] + profile.t[1]);
-            profile.t[3] = 0;
-            profile.t[4] = 0;
-            profile.t[5] = 0;
-            profile.t[6] = 0;
-
-            if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jf, vMax, vMin, aMax, aMin, jMax)) {
-                return true;
-            }
         }
     }
 
@@ -1029,28 +991,10 @@ bool PositionStep2::time_none(Profile& profile, double vMax, double vMin, double
         }
     }
 
-    // 1 step profile (ak. UDU), sometimes missed because of numerical errors
-    {
-        const double jf = ad/tf;
-        profile.t[0] = tf;
-        profile.t[1] = 0;
-        profile.t[2] = 0;
-        profile.t[3] = 0;
-        profile.t[4] = 0;
-        profile.t[5] = 0;
-        profile.t[6] = 0;
-
-        if (profile.check_with_timing<JerkSigns::UDDU, Limits::NONE>(tf, jf, vMax, vMin, aMax, aMin, jMax)) {
-            return true;
-        }
-    }
-
     return false;
 }
 
 bool PositionStep2::get_profile(Profile& profile) {
-    profile.set_boundary(p0, v0, a0, pf, vf, af);
-
     // Test all cases to get ones that match
     // However we should guess which one is correct and try them first...
     const bool up_first = (pd > tf * v0);

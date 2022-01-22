@@ -7,9 +7,10 @@
 #include <iostream>
 #include <limits>
 #include <optional>
-#include <tuple>
 
+#include <ruckig/brake.hpp>
 #include <ruckig/roots.hpp>
+#include <ruckig/utils.hpp>
 
 
 namespace ruckig {
@@ -37,11 +38,8 @@ public:
     //! Target (final) kinematic state
     double pf, vf, af;
 
-    //! Total time of the braking segments
-    std::optional<double> t_brake;
-
-    //! Allow up to two segments of braking before the "correct" profile starts
-    std::array<double, 2> t_brakes, j_brakes, a_brakes, v_brakes, p_brakes;
+    //! Brake sub-profiles
+    BrakeProfile brake, accel;
 
     // For velocity interface
     template<JerkSigns jerk_signs, Limits limits>
@@ -65,7 +63,7 @@ public:
             }
         }
 
-        if (t_sum[6] > 1e12) { // For numerical reasons, is that needed?
+        if (t_sum.back() > 1e12) { // For numerical reasons, is that needed?
             return false;
         }
 
@@ -88,8 +86,8 @@ public:
         const double aLowLim = ((aMax > 0) ? aMin : aMax) - 1e-12;
 
         // Velocity limit can be broken in the beginning if both initial velocity and acceleration are too high
-        // std::cout << std::setprecision(15) << "target: " << std::abs(p[7]-pf) << " " << std::abs(v[7] - vf) << " " << std::abs(a[7] - af) << " T: " << t_sum[6] << " " << to_string() << std::endl;
-        return std::abs(v[7] - vf) < 1e-8 && std::abs(a[7] - af) < 1e-10
+        // std::cout << std::setprecision(15) << "target: " << std::abs(p.back() - pf) << " " << std::abs(v.back() - vf) << " " << std::abs(a.back() - af) << " T: " << t_sum.back() << " " << to_string() << std::endl;
+        return std::abs(v.back() - vf) < 1e-8 && std::abs(a.back() - af) < 1e-10
             && a[1] >= aLowLim && a[3] >= aLowLim && a[5] >= aLowLim
             && a[1] <= aUppLim && a[3] <= aUppLim && a[5] <= aUppLim;
     }
@@ -97,7 +95,7 @@ public:
     template<JerkSigns jerk_signs, Limits limits>
     inline bool check_for_velocity_with_timing(double, double jf, double aMax, double aMin) {
         // Time doesn't need to be checked as every profile has a: tf - ... equation
-        return check_for_velocity<jerk_signs, limits>(jf, aMax, aMin); // && (std::abs(t_sum[6] - tf) < 1e-8);
+        return check_for_velocity<jerk_signs, limits>(jf, aMax, aMin); // && (std::abs(t_sum.back() - tf) < 1e-8);
     }
 
     // For position interface
@@ -134,7 +132,7 @@ public:
             }
         }
 
-        if (t_sum[6] > 1e12) { // For numerical reasons, is that needed?
+        if (t_sum.back() > 1e12) { // For numerical reasons, is that needed?
             return false;
         }
 
@@ -191,8 +189,8 @@ public:
         const double aLowLim = ((aMax > 0) ? aMin : aMax) - 1e-12;
 
         // Velocity limit can be broken in the beginning if both initial velocity and acceleration are too high
-        // std::cout << std::setprecision(16) << "target: " << std::abs(p[7]-pf) << " " << std::abs(v[7] - vf) << " " << std::abs(a[7] - af) << " T: " << t_sum[6] << " " << to_string() << std::endl;
-        return std::abs(p[7] - pf) < 1e-8 && std::abs(v[7] - vf) < 1e-8 && std::abs(a[7] - af) < 1e-10
+        // std::cout << std::setprecision(16) << "target: " << std::abs(p.back() - pf) << " " << std::abs(v.back() - vf) << " " << std::abs(a.back() - af) << " T: " << t_sum.back() << " " << to_string() << std::endl;
+        return std::abs(p.back() - pf) < 1e-8 && std::abs(v.back() - vf) < 1e-8 && std::abs(a.back() - af) < 1e-10
             && a[1] >= aLowLim && a[3] >= aLowLim && a[5] >= aLowLim
             && a[1] <= aUppLim && a[3] <= aUppLim && a[5] <= aUppLim
             && v[3] <= vUppLim && v[4] <= vUppLim && v[5] <= vUppLim && v[6] <= vUppLim
@@ -202,21 +200,12 @@ public:
     template<JerkSigns jerk_signs, Limits limits>
     inline bool check_with_timing(double, double jf, double vMax, double vMin, double aMax, double aMin) {
         // Time doesn't need to be checked as every profile has a: tf - ... equation
-        return check<jerk_signs, limits>(jf, vMax, vMin, aMax, aMin); // && (std::abs(t_sum[6] - tf) < 1e-8);
+        return check<jerk_signs, limits>(jf, vMax, vMin, aMax, aMin); // && (std::abs(t_sum.back() - tf) < 1e-8);
     }
 
     template<JerkSigns jerk_signs, Limits limits>
     inline bool check_with_timing(double tf, double jf, double vMax, double vMin, double aMax, double aMin, double jMax) {
         return (std::abs(jf) < std::abs(jMax) + 1e-12) && check_with_timing<jerk_signs, limits>(tf, jf, vMax, vMin, aMax, aMin);
-    }
-
-    //! Integrate with constant jerk for duration t. Returns new position, new velocity, and new acceleration.
-    inline static std::tuple<double, double, double> integrate(double t, double p0, double v0, double a0, double j) {
-        return std::make_tuple(
-            p0 + t * (v0 + t * (a0 / 2 + t * j / 6)),
-            v0 + t * (a0 + t * j / 2),
-            a0 + t * j
-        );
     }
 
     //! Set boundary values for the position interface
@@ -280,12 +269,12 @@ public:
         extrema.min = std::numeric_limits<double>::infinity();
         extrema.max = -std::numeric_limits<double>::infinity();
 
-        if (t_brake) {
-            if (t_brakes[0] > 0.0) {
-                check_step_for_position_extremum(0.0, t_brakes[0], p_brakes[0], v_brakes[0], a_brakes[0], j_brakes[0], extrema);
+        if (brake.duration > 0.0) {
+            if (brake.t[0] > 0.0) {
+                check_step_for_position_extremum(0.0, brake.t[0], brake.p[0], brake.v[0], brake.a[0], brake.j[0], extrema);
 
-                if (t_brakes[1] > 0.0) {
-                    check_step_for_position_extremum(t_brakes[0], t_brakes[1], p_brakes[1], v_brakes[1], a_brakes[1], j_brakes[1], extrema);
+                if (brake.t[1] > 0.0) {
+                    check_step_for_position_extremum(brake.t[0], brake.t[1], brake.p[1], brake.v[1], brake.a[1], brake.j[1], extrema);
                 }
             }
         }
@@ -295,16 +284,16 @@ public:
             if (i > 0) {
                 t_current_sum = t_sum[i - 1];
             }
-            check_step_for_position_extremum(t_current_sum + t_brake.value_or(0.0), t[i], p[i], v[i], a[i], j[i], extrema);
+            check_step_for_position_extremum(t_current_sum + brake.duration, t[i], p[i], v[i], a[i], j[i], extrema);
         }
 
         if (pf < extrema.min) {
             extrema.min = pf;
-            extrema.t_min = t_sum[6] + t_brake.value_or(0.0);
+            extrema.t_min = t_sum.back() + brake.duration;
         }
         if (pf > extrema.max) {
             extrema.max = pf;
-            extrema.t_max = t_sum[6] + t_brake.value_or(0.0);
+            extrema.t_max = t_sum.back() + brake.duration;
         }
 
         return extrema;
@@ -333,7 +322,7 @@ public:
         }
 
         if (std::abs(pf - pt) < 1e-9) {
-            time = offset + t_sum[6];
+            time = offset + t_sum.back();
             vt = vf;
             at = af;
             return true;

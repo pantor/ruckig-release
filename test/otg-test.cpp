@@ -1,5 +1,5 @@
 #define DOCTEST_CONFIG_IMPLEMENT
-#include "doctest.h"
+#include <doctest/doctest.h>
 
 #include <random>
 #include "randomizer.hpp"
@@ -14,13 +14,15 @@
 using namespace ruckig;
 
 
-namespace ruckig {
-    template<size_t DOFs>
-    std::ostream& operator<< (std::ostream& os, const InputParameter<DOFs>& value) {
-        os << value.to_string();
-        return os;
-    }
-}
+int seed {42};
+size_t number_trajectories {150000}; // Some user variable you want to be able to set
+size_t random_1, random_3, random_3_high, step_through_3, random_discrete_3, random_direction_3, comparison_1, comparison_3, velocity_random_3;
+
+std::normal_distribution<double> position_dist {0.0, 4.0};
+std::normal_distribution<double> dynamic_dist {0.0, 0.8};
+std::uniform_real_distribution<double> limit_dist {0.08, 16.0};
+std::uniform_real_distribution<double> limit_dist_high {10.0, 1000000.0};
+std::uniform_real_distribution<double> min_limit_dist {-16.0, -0.08};
 
 
 template<size_t DOFs, class OTGType>
@@ -102,20 +104,8 @@ inline void check_comparison(OTGType& otg, InputParameter<DOFs>& input, OTGCompT
 }
 
 
-int seed {42};
-size_t number_trajectories {120000}; // Some user variable you want to be able to set
-size_t random_1, random_3, random_3_high, step_through_3, random_discrete_3, random_direction_3, comparison_1, comparison_3, velocity_random_3;
-
-std::normal_distribution<double> position_dist {0.0, 4.0};
-std::normal_distribution<double> dynamic_dist {0.0, 0.8};
-std::uniform_real_distribution<double> limit_dist {0.08, 16.0};
-std::uniform_real_distribution<double> limit_dist_high {10.0, 1000000.0};
-// std::uniform_real_distribution<double> limit_dist {800.0, 160000.0};
-std::uniform_real_distribution<double> min_limit_dist {-16.0, -0.08};
-
-
 template<class T>
-void check_array(const T& first, const T& second) {
+inline void check_array(const T& first, const T& second) {
     for (size_t dof = 0; dof < first.size(); ++dof) {
         CHECK( first[dof] == doctest::Approx(second[dof]) );
     }
@@ -137,7 +127,13 @@ TEST_CASE("secondary" * doctest::description("Secondary Features")) {
     input.max_acceleration = {1.0, 1.0, 1.0};
     input.max_jerk = {1.0, 1.0, 1.0};
 
-    auto result = otg.update(input, output);
+    Trajectory<3> traj;
+    auto result = otg.calculate(input, traj);
+
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.0) );
+
+    result = otg.update(input, output);
 
     CHECK( result == Result::Working );
     CHECK( output.trajectory.get_duration() == doctest::Approx(4.0) );
@@ -153,8 +149,13 @@ TEST_CASE("secondary" * doctest::description("Secondary Features")) {
     check_array(new_velocity, input.target_velocity);
     check_array(new_acceleration, input.target_acceleration);
 
-    output.trajectory.at_time(2.0, new_position, new_velocity, new_acceleration);
+    size_t new_section;
+    output.trajectory.at_time(2.0, new_position, new_velocity, new_acceleration, new_section);
     check_array(new_position, {0.5, -2.6871268303, 1.0});
+    CHECK( new_section == 0 );
+
+    output.trajectory.at_time(5.0, new_position, new_velocity, new_acceleration, new_section);
+    CHECK( new_section == 1 );
 
     auto independent_min_durations = output.trajectory.get_independent_min_durations();
     CHECK( independent_min_durations[0] == doctest::Approx(3.1748021039) );
@@ -231,6 +232,327 @@ TEST_CASE("secondary" * doctest::description("Secondary Features")) {
     CHECK( output.trajectory.get_duration() == doctest::Approx(12.0) );
 }
 
+TEST_CASE("input-validation" * doctest::description("Secondary Features")) {
+    Ruckig<2, true> otg;
+    InputParameter<2> input;
+
+    const double nan = std::nan("");
+
+    input.current_position = {0.0, -2.0};
+    input.current_velocity = {0.0, 0.0};
+    input.current_acceleration = {0.0, 0.0};
+    input.target_position = {1.0, -3.0};
+    input.target_velocity = {0.0, 0.3};
+    input.target_acceleration = {0.0, 0.0};
+    input.max_velocity = {1.0, 1.0};
+    input.max_acceleration = {1.0, 1.0};
+    input.max_jerk = {1.0, 1.0};
+
+    CHECK( otg.validate_input(input) );
+
+    input.max_jerk = {1.0, nan};
+    CHECK_FALSE( otg.validate_input(input) );
+
+    input.max_jerk = {1.0, 1.0};
+    input.current_position = {1.0, nan};
+    CHECK_FALSE( otg.validate_input(input) );
+
+    input.current_position = {1.0, 1.0};
+    input.max_acceleration = {1.0, -1.0};
+    CHECK_FALSE( otg.validate_input(input) );
+
+    input.max_acceleration = {1.0, 1.0};
+    input.target_velocity = {0.0, 1.3};
+    CHECK( otg.validate_input(input, false, false) );
+    CHECK_FALSE( otg.validate_input(input, false, true) );
+    CHECK_FALSE( otg.validate_input(input) );
+
+    input.target_velocity = {0.0, 0.3};
+    input.current_velocity = {2.0, 0.0};
+    CHECK( otg.validate_input(input, false, false) );
+    CHECK_FALSE( otg.validate_input(input, true, false) );
+    CHECK_FALSE( otg.validate_input(input, true, true) );
+    CHECK( otg.validate_input(input) );
+
+    input.current_velocity = {1.0, 0.0};
+    input.current_acceleration = {-1.0, 0.0};
+    CHECK( otg.validate_input(input) );
+    CHECK( otg.validate_input(input, true, true) );
+
+    input.current_velocity = {1.0, 0.0};
+    input.current_acceleration = {1.0, 0.0};
+    CHECK( otg.validate_input(input) );
+    CHECK_FALSE( otg.validate_input(input, true, true) );
+
+    input.current_velocity = {0.72, 0.0};
+    input.current_acceleration = {0.72, 0.0};
+    CHECK( otg.validate_input(input, true, true) );
+
+    input.current_velocity = {0.0, 0.0};
+    input.current_acceleration = {0.0, 0.0};
+    input.target_velocity = {0.0, 0.72};
+    input.target_acceleration = {0.0, 0.72};
+    CHECK( otg.validate_input(input) );
+
+    input.target_velocity = {0.0, 1.0};
+    input.target_acceleration = {0.0, 1.0};
+    CHECK( otg.validate_input(input) );
+
+    input.target_velocity = {0.0, 1.0};
+    input.target_acceleration = {0.0, -0.0001};
+    CHECK_FALSE( otg.validate_input(input) );
+}
+
+TEST_CASE("enabled" * doctest::description("Enabled DoF")) {
+    Ruckig<3, true> otg {0.005};
+    InputParameter<3> input;
+    OutputParameter<3> output;
+
+    input.enabled = {true, false, false};
+    input.current_position = {0.0, -2.0, 0.0};
+    input.current_velocity = {0.0, 0.1, 0.0};
+    input.current_acceleration = {0.0, 0.0, -0.2};
+    input.target_position = {1.0, -3.0, 2.0};
+    input.max_velocity = {1.0, 1.0, 1.0};
+    input.max_acceleration = {1.0, 1.0, 1.0};
+    input.max_jerk = {1.0, 1.0, 1.0};
+
+    Result result = otg.update(input, output);
+    CHECK( result == Result::Working );
+    CHECK( output.trajectory.get_duration() == doctest::Approx(3.1748021039) );
+
+    std::array<double, 3> new_position, new_velocity, new_acceleration;
+    output.trajectory.at_time(0.0, new_position, new_velocity, new_acceleration);
+    check_array(new_position, input.current_position);
+    check_array(new_velocity, input.current_velocity);
+    check_array(new_acceleration, input.current_acceleration);
+
+    output.trajectory.at_time(output.trajectory.get_duration(), new_position, new_velocity, new_acceleration);
+    check_array(new_position, {input.target_position[0], -1.6825197896, -1.0079368399});
+
+    // Make sure that disabled DoFs overwrite prior blocks
+    input.enabled = {true, true, true};
+    input.current_position = {0.0, 0.0, 0.0};
+    input.target_position = {100.0, -3000.0, 2000.0};
+    input.target_velocity = {1.0, 1.0, 1.0};
+    result = otg.update(input, output);
+
+    input.enabled = {false, false, true};
+    input.current_position = {0.0, -2.0, 0.0};
+    input.current_velocity = {0.0, 0.2, 0.0};
+    input.current_acceleration = {0.0, 0.2, 0.0};
+    input.target_position = {1.0, -3.0, 2.0};
+    input.target_velocity = {0.0, 0.0, 0.2};
+    input.target_acceleration = {0.0, 0.0, -0.1};
+    input.max_velocity = {1.0, 1.0, 1.0};
+    input.max_acceleration = {1.0, 1.0, 1.0};
+    input.max_jerk = {1.0, 1.0, 1.0};
+
+    result = otg.update(input, output);
+    CHECK( result == Result::Working );
+    CHECK( output.trajectory.get_duration() == doctest::Approx(3.6578610221) );
+}
+
+TEST_CASE("phase-synchronization" * doctest::description("Phase Synchronization")) {
+    Ruckig<3, true> otg {0.005};
+    InputParameter<3> input;
+    OutputParameter<3> output;
+
+    input.current_position = {0.0, -2.0, 0.0};
+    input.target_position = {1.0, -3.0, 2.0};
+    input.max_velocity = {1.0, 1.0, 1.0};
+    input.max_acceleration = {1.0, 1.0, 1.0};
+    input.max_jerk = {1.0, 1.0, 1.0};
+    input.synchronization = Synchronization::Phase;
+
+    Trajectory<3> traj;
+    std::array<double, 3> new_position, new_velocity, new_acceleration;
+    auto result = otg.calculate(input, traj);
+
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.0) );
+
+    result = otg.update(input, output);
+    output.trajectory.at_time(1.0, new_position, new_velocity, new_acceleration);
+
+    CHECK( result == Result::Working );
+    CHECK( output.trajectory.get_duration() == doctest::Approx(4.0) );
+    check_array(new_position, {0.0833333333, -2.0833333333, 0.1666666667});
+
+    input.current_position = {0.0, -2.0, 0.0};
+    input.target_position = {10.0, -3.0, 2.0};
+    input.max_velocity = {10.0, 2.0, 1.0};
+    input.max_acceleration = {10.0, 2.0, 1.0};
+    input.max_jerk = {10.0, 2.0, 1.0};
+
+    result = otg.update(input, output);
+    output.trajectory.at_time(1.0, new_position, new_velocity, new_acceleration);
+
+    CHECK( result == Result::Working );
+    CHECK( output.trajectory.get_duration() == doctest::Approx(4.0) );
+    check_array(new_position, {0.8333333333, -2.0833333333, 0.1666666667});
+
+    // Test equal start and target state
+    input.current_position = {1.0, -2.0, 3.0};
+    input.target_position = {1.0, -2.0, 3.0};
+
+    result = otg.update(input, output);
+    output.trajectory.at_time(0.0, new_position, new_velocity, new_acceleration);
+
+    CHECK( result == Result::Finished );
+    CHECK( output.trajectory.get_duration() == doctest::Approx(0.0) );
+    check_array(new_position, {1.0, -2.0, 3.0});
+}
+
+TEST_CASE("discretization" * doctest::description("Duration Discretization")) {
+    Ruckig<3, true> otg {0.01};
+    InputParameter<3> input;
+    OutputParameter<3> output;
+
+    input.current_position = {0.0, 0.0, 0.0};
+    input.target_position = {1.0, -3.0, 2.0};
+    input.target_velocity = {0.2, 0.2, 0.2};
+    input.max_velocity = {1.0, 1.0, 1.0};
+    input.max_acceleration = {2.0, 2.0, 2.0};
+    input.max_jerk = {1.8, 2.4, 2.0};
+    input.duration_discretization = DurationDiscretization::Discrete;
+
+    Trajectory<3> traj;
+    std::array<double, 3> new_position, new_velocity, new_acceleration;
+    auto result = otg.calculate(input, traj);
+
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.5) );
+
+    result = otg.update(input, output);
+    output.trajectory.at_time(4.5, new_position, new_velocity, new_acceleration);
+    check_array(new_position, {1.0, -3.0, 2.0});
+}
+
+TEST_CASE("per-dof-setting" * doctest::description("Per DoF Settings")) {
+    Ruckig<3, true> otg {0.005};
+    InputParameter<3> input;
+    Trajectory<3> traj;
+
+    input.current_position = {0.0, -2.0, 0.0};
+    input.current_velocity = {0.0, 0.0, 0.0};
+    input.current_acceleration = {0.0, 0.0, 0.0};
+    input.target_position = {1.0, -3.0, 2.0};
+    input.target_velocity = {0.0, 0.3, 0.0};
+    input.target_acceleration = {0.0, 0.0, 0.0};
+    input.max_velocity = {1.0, 1.0, 1.0};
+    input.max_acceleration = {1.0, 1.0, 1.0};
+    input.max_jerk = {1.0, 1.0, 1.0};
+
+    auto result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.0) );
+
+    std::array<double, 3> new_position, new_velocity, new_acceleration;
+    traj.at_time(2.0, new_position, new_velocity, new_acceleration);
+    check_array(new_position, {0.5, -2.6871268303, 1.0});
+
+
+    input.control_interface = ControlInterface::Velocity;
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(1.095445115) );
+
+    traj.at_time(1.0, new_position, new_velocity, new_acceleration);
+    check_array(new_position, {0.0, -1.8641718534, 0.0});
+
+
+    input.per_dof_control_interface = {ControlInterface::Position, ControlInterface::Velocity, ControlInterface::Position};
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.0) );
+
+    traj.at_time(2.0, new_position, new_velocity, new_acceleration);
+    check_array(new_position, {0.5, -1.8528486838, 1.0});
+
+
+    input.per_dof_synchronization = {Synchronization::Time, Synchronization::None, Synchronization::Time};
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.0) );
+
+    traj.at_time(2.0, new_position, new_velocity, new_acceleration);
+    check_array(new_position, {0.5, -1.5643167673, 1.0});
+
+
+    input.control_interface = ControlInterface::Position;
+    input.per_dof_control_interface = std::nullopt;
+    input.per_dof_synchronization = {Synchronization::None, Synchronization::Time, Synchronization::Time};
+
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(4.0) );
+
+    traj.at_time(2.0, new_position, new_velocity, new_acceleration);
+    check_array(new_position, {0.7482143874, -2.6871268303, 1.0});
+
+
+    auto independent_min_durations = traj.get_independent_min_durations();
+    traj.at_time(independent_min_durations[0], new_position, new_velocity, new_acceleration);
+    CHECK( new_position[0] == doctest::Approx(input.target_position[0]) );
+    traj.at_time(independent_min_durations[1], new_position, new_velocity, new_acceleration);
+    CHECK( new_position[1] == doctest::Approx(-3.0890156397) );
+    traj.at_time(independent_min_durations[2], new_position, new_velocity, new_acceleration);
+    CHECK( new_position[2] == doctest::Approx(input.target_position[2]) );
+
+
+    input.current_position = {0.0, 0.0, 0.0};
+    input.current_velocity = {0.0, 0.0, 0.0};
+    input.current_acceleration = {0.0, 0.0, 0.0};
+
+    input.target_position = {35, 35, 35};
+    input.target_velocity = {125, 125, 100};
+    input.target_acceleration = {0.0, 0.0, 0.0};
+
+    input.max_velocity = {125, 125, 100};
+    input.max_acceleration = {2000, 2000, 2000};
+    input.max_jerk = {20000, 20000, 20000};
+    input.per_dof_synchronization = {Synchronization::Time, Synchronization::Time, Synchronization::None};
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(0.4207106781) );
+
+    input.current_position = {0.0, -2.0, 0.0};
+    input.current_velocity = {0.0, 0.2, 0.0};
+    input.current_acceleration = {0.0, 0.2, 0.0};
+
+    input.target_position = {1.0, -3.0, 2.0};
+    input.target_velocity = {0.0, 0.0, 0.2};
+    input.target_acceleration = {0.0, 0.0, -0.1};
+
+    input.max_velocity = {1.0, 1.0, 1.0};
+    input.max_acceleration = {1.0, 1.0, 1.0};
+    input.max_jerk = {1.0, 1.0, 1.0};
+
+    input.per_dof_synchronization = {Synchronization::None, Synchronization::None, Synchronization::Time};
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(3.7885667284) );
+
+    input.per_dof_synchronization = {Synchronization::None, Synchronization::Time, Synchronization::None};
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(3.7885667284) );
+
+    input.enabled = {true, false, true};
+
+    result = otg.calculate(input, traj);
+    CHECK( result == Result::Working );
+    CHECK( traj.get_duration() == doctest::Approx(3.6578610221) );
+}
+
 TEST_CASE("dynamic-dofs" * doctest::description("Dynamic DoFs")) {
     Ruckig<DynamicDOFs, true> otg {3, 0.005};
     InputParameter<DynamicDOFs> input {3};
@@ -259,7 +581,7 @@ TEST_CASE("dynamic-dofs" * doctest::description("Dynamic DoFs")) {
 }
 
 TEST_CASE("known" * doctest::description("Known examples")) {
-    Ruckig<3, true> otg {0.005};
+    Ruckig<3, true> otg {0.004};
 
     InputParameter<3> input;
     input.current_position = {0.0, 0.0, 0.0};
@@ -440,6 +762,57 @@ TEST_CASE("known" * doctest::description("Known examples")) {
     input.max_acceleration = {20000, 200000, 2000000};
     input.max_jerk = {200000, 2000000, 20000000};
     check_duration(otg, input, 0.4119588818);
+
+    input.current_position = {-0.05598571695553641, -0.534847776106059, 0.0978130731424748};
+    input.current_velocity = {-0.03425673149926184, -0.8169926404190487, -0.004506245841081729};
+    input.current_acceleration = {-2.720000000000001, 1.440254448401435, 0};
+    input.target_position = {-0.0534691276550293, -0.6224863891601563, 0.09690575408935546};
+    input.target_velocity = {0.0, 0.0, 0.0};
+    input.target_acceleration = {0.0, 0.0, 0.0};
+    input.max_velocity = {0.8500000000000001, 0.8500000000000001, 0.8500000000000001};
+    input.max_acceleration = {4.25, 4.25, 4.25};
+    input.max_jerk = {85.00000000000001, 85.00000000000001, 85.00000000000001};
+    check_duration(otg, input, 0.2281604414);
+
+    input.current_position = {0.0, 0.0, 0.3736320740840176};
+    input.current_velocity = {0.0, 0.0, -0.60486324450823};
+    input.current_acceleration = {0.0, 0.0, -0.4953501898933239};
+    input.target_position = {0.0, 0.0, 0.233562911156468};
+    input.target_velocity = {0.0, 0.0, 0.0};
+    input.target_acceleration = {0.0, 0.0, 0.0};
+    input.max_velocity = {1.0, 1.0, 10.01369296498101};
+    input.max_acceleration = {1.0, 1.0, 14.72621077848741};
+    input.max_jerk = {1.0, 1.0, 7.770133554060553};
+    input.min_velocity = {-1.0, -1.0, -1.94898305867544};
+    input.min_acceleration = {-1.0, -1.0, -0.6829625196960336};
+    check_duration(otg, input, 1.08732372);
+
+    input.current_position = {-0.01919986582215404, 0.0, 0.0};
+    input.current_velocity = {-0.3858205249368821, 0.0, 0.0};
+    input.current_acceleration = {0.1889847091893647, 0.0, 0.0};
+    input.target_position = {1.297187158009963, 0.0, 0.0};
+    input.target_velocity = {1.160424379732321, 0.0, 0.0};
+    input.target_acceleration = {0.4552736879206988, 0.0, 0.0};
+    input.max_velocity = {14.64378197125325, 3.0, 3.0};
+    input.max_acceleration = {0.4552736879216988, 2.5, 2.5};
+    input.max_jerk = {12.15045820314999, 2.2, 2.2};
+    input.minimum_duration = 3.408914;
+    check_duration(otg, input, 3.408914);
+
+    input.current_position = {0.2473592757796861, 0.2921606775204735, 0.7758663276711127};
+    input.current_velocity = {-0.2426115138900957, 0.2200706500820608, -0.01891492763905089};
+    input.current_acceleration = {0.01877538437863763, -0.6573642866096158, 0.5};
+    input.target_position = {0.2308075286416321, 0.3066442218484541, 0.7733155040940536};
+    input.target_velocity = {0.0, 0.0, 0.0};
+    input.target_acceleration = {0.0, 0.0, 0.0};
+    input.max_velocity = {0.25, 0.25, 0.25};
+    input.max_acceleration = {2.5, 2.5, 2.5};
+    input.max_jerk = {62.5, 62.5, 62.5};
+    input.min_velocity = std::nullopt;
+    input.min_acceleration = std::nullopt;
+    input.minimum_duration = std::nullopt;
+    input.duration_discretization = DurationDiscretization::Discrete;
+    check_duration(otg, input, 0.14);
 }
 
 TEST_CASE("random_discrete_3" * doctest::description("Random discrete input with 3 DoF and target velocity, acceleration")) {

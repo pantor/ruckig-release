@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 
-project(ruckig VERSION 0.4.0 LANGUAGES CXX)
+project(ruckig VERSION 0.6.2 LANGUAGES CXX)
 
 
 list(INSERT CMAKE_MODULE_PATH 0 ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -10,9 +10,11 @@ include(GNUInstallDirs)
 
 option(BUILD_EXAMPLES "Build example programs" ON)
 option(BUILD_PYTHON_MODULE "Build python module" OFF)
+option(BUILD_ONLINE_CLIENT "Build online client to calculate Ruckig Pro trajectories" OFF)
 option(BUILD_TESTS "Build tests" ON)
 option(BUILD_BENCHMARK "Build benchmark" OFF)
 option(BUILD_SHARED_LIBS "Build as shared library" ON)
+option(EXPOSE_INTERNAL "Expose some internal classes and methods" OFF)
 
 if(WIN32 AND BUILD_SHARED_LIBS)
   option(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS "On Windows, export all symbols when building a shared library." ON)
@@ -48,6 +50,20 @@ else()
 endif()
 
 
+if(EXPOSE_INTERNAL)
+  target_compile_definitions(ruckig PUBLIC WITH_EXPOSE_INTERNAL)
+endif()
+
+
+if(BUILD_ONLINE_CLIENT)
+  target_include_directories(ruckig PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  )
+  target_compile_definitions(ruckig PUBLIC WITH_ONLINE_CLIENT)
+endif()
+
+
 if(Reflexxes)
   set(REFLEXXES_TYPE "ReflexxesTypeII" CACHE STRING "Type of Reflexxes library") # or ReflexxesTypeIV
   message("Found Reflexxes ${REFLEXXES_TYPE}")
@@ -58,10 +74,17 @@ endif()
 
 
 if(BUILD_EXAMPLES)
-  foreach(example IN ITEMS position)
+  foreach(example IN ITEMS 1_position 2_position_offline 5_velocity 6_stop 7_minimum_duration 8_dynamic_dofs)
     add_executable(example-${example} "examples/${example}.cpp")
     target_link_libraries(example-${example} PRIVATE ruckig)
   endforeach()
+
+  if(BUILD_ONLINE_CLIENT)
+    foreach(example IN ITEMS 3_waypoints 4_waypoints_online)
+      add_executable(example-${example} "examples/${example}.cpp")
+      target_link_libraries(example-${example} PRIVATE ruckig)
+    endforeach()
+  endif()
 endif()
 
 
@@ -76,6 +99,9 @@ if(BUILD_PYTHON_MODULE)
   pybind11_add_module(python_ruckig src/python.cpp)
   target_compile_features(python_ruckig PUBLIC cxx_std_17)
   target_link_libraries(python_ruckig PUBLIC ruckig)
+  if(BUILD_ONLINE_CLIENT)
+    target_compile_definitions(python_ruckig PUBLIC WITH_ONLINE_CLIENT)
+  endif()
 
   set_target_properties(python_ruckig PROPERTIES OUTPUT_NAME ruckig)
   set_target_properties(python_ruckig PROPERTIES ARCHIVE_OUTPUT_NAME python_ruckig)
@@ -134,6 +160,7 @@ if(BUILD_TESTS)
       target_compile_definitions(${test} PUBLIC WITH_REFLEXXES)
     endif()
     target_link_libraries(${test} PRIVATE ruckig)
+    target_include_directories(${test} PRIVATE third_party)
     add_test(NAME ${test} COMMAND ${test})
   endforeach()
 

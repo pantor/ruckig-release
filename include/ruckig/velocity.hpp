@@ -11,7 +11,7 @@ using JerkSigns = Profile::JerkSigns;
 
 //! Mathematical equations for Step 1 in velocity interface: Extremal profiles
 class VelocityStep1 {
-    double p0, v0, a0;
+    double v0, a0;
     double vf, af;
     double _aMax, _aMin, _jMax;
 
@@ -22,15 +22,15 @@ class VelocityStep1 {
     void time_acc0(Profile& profile, double aMax, double aMin, double jMax);
     void time_none(Profile& profile, double aMax, double aMin, double jMax);
 
-    inline void add_profile(Profile profile, double jMax) {
-        profile.pf = profile.p[7];
-        profile.direction = (jMax > 0) ? Profile::Direction::UP : Profile::Direction::DOWN;
+    inline void add_profile(const Profile& profile, double jMax) {
         valid_profiles[valid_profile_counter] = profile;
+        valid_profiles[valid_profile_counter].pf = profile.p.back();
+        valid_profiles[valid_profile_counter].direction = (jMax > 0) ? Profile::Direction::UP : Profile::Direction::DOWN;
         ++valid_profile_counter;
     }
 
 public:
-    explicit VelocityStep1(double p0, double v0, double a0, double vf, double af, double aMax, double aMin, double jMax);
+    explicit VelocityStep1(double v0, double a0, double vf, double af, double aMax, double aMin, double jMax);
 
     bool get_profile(const Profile& input, Block& block);
 };
@@ -38,7 +38,7 @@ public:
 
 //! Mathematical equations for Step 2 in velocity interface: Time synchronization
 class VelocityStep2 {
-    double p0, v0, a0;
+    double v0, a0;
     double tf, vf, af; 
     double _aMax, _aMin, _jMax;
 
@@ -50,7 +50,7 @@ class VelocityStep2 {
     }
 
 public:
-    explicit VelocityStep2(double tf, double p0, double v0, double a0, double vf, double af, double aMax, double aMin, double jMax);
+    explicit VelocityStep2(double tf, double v0, double a0, double vf, double af, double aMax, double aMin, double jMax);
 
     bool get_profile(Profile& profile);
 };
