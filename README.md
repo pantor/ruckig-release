@@ -8,15 +8,12 @@
   <a href="https://github.com/pantor/ruckig/actions">
     <img src="https://github.com/pantor/ruckig/workflows/CI/badge.svg" alt="CI">
   </a>
-
   <a href="https://github.com/pantor/ruckig/issues">
     <img src="https://img.shields.io/github/issues/pantor/ruckig.svg" alt="Issues">
   </a>
-
   <a href="https://github.com/pantor/ruckig/releases">
     <img src="https://img.shields.io/github/v/release/pantor/ruckig.svg?include_prereleases&sort=semver" alt="Releases">
   </a>
-
   <a href="https://github.com/pantor/ruckig/blob/master/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT">
   </a>
@@ -38,7 +35,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ```
 
-To install Ruckig in a system-wide directory, use `(sudo) make install`. An example of using Ruckig in your CMake project is given by `examples/CMakeLists.txt`. However, you can also include Ruckig as a directory within your project and call `add_subdirectory(ruckig)` in your parent `CMakeLists.txt`.
+To install Ruckig in a system-wide directory, use `(sudo) make install`. An example of using Ruckig in your CMake project is given by `examples/CMakeLists.txt`. However, you can also include Ruckig as a directory within your project and call `add_subdirectory(ruckig)` in your parent `CMakeLists.txt`. To enable the [Online API](http://api.ruckig.com/docs) for intermediate waypoints, just pass the `BUILD_ONLINE_CLIENT` flag to CMake. 
 
 Ruckig is also available as a Python module, in particular for development or debugging purposes. The Ruckig *Community Version* can be installed from [PyPI](https://pypi.org/project/ruckig/) via
 ```bash
@@ -110,7 +107,7 @@ input.intermediate_positions = {
   {0.8, ...},
 };
 ```
-As soon as at least one intermediate positions is given, the Ruckig Community Version switches to the mentioned (of course, non real-time capable) remote API. If you require real-time calculation on your own hardware, we refer to the *Ruckig Pro Version*.
+As soon as at least one intermediate positions is given, the Ruckig Community Version switches to the mentioned (of course, non real-time capable) remote API. If you require real-time calculation on your own hardware, please contact us for the *Ruckig Pro Version*.
 
 When using *intermediate positions*, both the underlying motion planning problem as well as its calculation changes significantly. In particular, there are some fundamental limitations for jerk-limited online trajectory generation regarding the usage of waypoints. Please find more information about these limitations [here](https://docs.ruckig.com/md_pages_intermediate_waypoints.html), and in general we recommend to use
 ```.cpp
@@ -237,12 +234,53 @@ Ruckig also supports an offline approach for calculating a trajectory:
 ```.cpp
 result = ruckig.calculate(input, trajectory);
 ```
-When only using this method, the `Ruckig` constructor does not need a control cycle as an argument.
+When only using this method, the `Ruckig` constructor does not need a control cycle (`delta_time`) as an argument. However if given, Ruckig supports stepping through the trajectory with
+```.cpp
+while (ruckig.update(trajectory, output) == Result::Working) {
+  // Make use of the new state here!
+  // e.g. robot->setJointPositions(output.new_position);
+}
+```
+starting from the current `output.time` (currently Ruckig Pro only).
+
+
+### Tracking Interface
+
+When following an arbitrary signal with position, velocity, acceleration, and jerk-limitation, the straight forward way would be to pass the current state to Ruckig's target state. However, as the resulting trajectory will take time to catch up, this approach will always lag behind the signal. The tracking interface solves this problem by predicting ahead (e.g. with constant acceleration by default) and is therefore able to follow signals very closely in a time-optimal way. This might be very helpful for (general) tracking, robot servoing, or trajectory post-processing applications. 
+
+To use the tracking interface, construct
+```.cpp
+Trackig<1> otg {0.01};  // control cycle
+```
+and set the current state as well as the kinematic constraints via
+```.cpp
+input.current_position = {0.0};
+input.current_velocity = {0.0};
+input.current_acceleration = {0.0};
+input.max_velocity = {0.8};
+input.max_acceleration = {2.0};
+input.max_jerk = {5.0};
+```
+Then, we can track a signal in an online manner within the real-time control loop 
+```.cpp
+for (double t = 0; t < 10.0; t += otg.delta_time) {
+  auto target_state = signal(t); // signal returns position, velocity, and acceleration
+  auto res = otg.update(target_state, input, output);
+  // Make use of the smooth target motion here (e.g. output.new_position)
+
+  output.pass_to_input(input);
+}
+```
+Please find a complete example [here](https://github.com/pantor/ruckig/blob/master/examples/13_tracking.cpp). This functionality can also be used in an offline manner, e.g. when the entire signal is known beforehand. Here, we call the
+```.cpp 
+smooth_trajectory = otg.calculate_trajectory(target_states, input);
+```
+method with the trajectory given as a `std::vector` of target states. The Tracking interface is available in the Ruckig Pro version.
 
 
 ### Dynamic Number of Degrees of Freedom
 
-So far, we have told Ruckig the number of DoFs as a template parameter. If you don't know the number of DoFs at compile-time, you can set the template parameter to `DynamicDOFs` and pass the DoFs to the constructor:
+So far, we have told Ruckig the number of DoFs as a template parameter. If you don't know the number of DoFs at compile-time, you can set the template parameter to `ruckig::DynamicDOFs` and pass the DoFs to the constructor:
 
 ```.cpp
 Ruckig<DynamicDOFs> otg {6, 0.001};
@@ -253,9 +291,38 @@ OutputParameter<DynamicDOFs> output {6};
 However, we recommend to keep the template parameter when possible: First, it has a performance benefit of a few percent. Second, it is convenient for real-time programming due to its easier handling of memory allocations. When using dynamic degrees of freedom, make sure to allocate the memory of all vectors beforehand.
 
 
+### Custom Vector Types
+
+Ruckig supports custom vector types to make interfacing with your code even easier and more flexible. Most importantly, you can switch to [Eigen Vectors](https://eigen.tuxfamily.org) simply by including Eigen (3.4 or later) before Ruckig
+```.cpp
+#include <Eigen/Core> // Version 3.4 or later
+#include <ruckig/ruckig.hpp>
+```
+and then call the constructors with the `ruckig::EigenVector` parameter.
+```.cpp
+Ruckig<6, EigenVector> otg {0.001};
+InputParameter<6, EigenVector> input;
+OutputParameter<6, EigenVector> output;
+```
+Now every in- and output of Ruckig's API (such as `current_position`, `new_position` or `max_jerk`) are Eigen types! To define completely custom vector types, you can pass a C++ [template template parameter](https://en.cppreference.com/w/cpp/language/template_parameters) to the constructor. This template template parameter needs to fulfill a range of template arguments and methods:
+```.cpp
+template<class Type, size_t DOFs>
+struct MinimalVector {
+  Type operator[](size_t i) const; // Array [] getter
+  Type& operator[](size_t i); // Array [] setter
+  size_t size() const; // Current size
+  bool operator==(const MinimalVector<T, DOFs>& rhs) const; // Equal comparison operator
+
+  // Only required in combination with DynamicDOFs, e.g. to allocate memory
+  void resize(size_t size);
+};
+```
+Note that `DynamicDOFs` corresponds to `DOFs = 0`. We've included a range of examples for using Ruckig with [(10) Eigen](https://github.com/pantor/ruckig/blob/master/examples/10_eigen_vector_type.cpp), [(11) custom vector types](https://github.com/pantor/ruckig/blob/master/examples/11_custom_vector_type.cpp), and [(12) custom types with a dynamic number of DoFs](https://github.com/pantor/ruckig/blob/master/examples/12_custom_vector_type_dynamic_dofs.cpp).
+
+
 ## Tests and Numerical Stability
 
-The current test suite validates over 5.000.000.000 random trajectories. The numerical exactness is tested for the final position and final velocity to be within `1e-8`, for the final acceleration to be within `1e-10`, and for the velocity, acceleration and jerk limit to be within of a numerical error of `1e-12`. These are absolute values - we suggest to scale your input so that these correspond to your required precision of the system. For example, for most real-world systems we suggest to use input values in `[m]` (instead of e.g. `[mm]`), as `1e-8m` is sufficient precise for practical trajectory generation. Furthermore, all kinematic limits should be below `1e12`. The maximal supported trajectory duration is `7e3`, which again should suffice for most applications seeking for time-optimality. Note that Ruckig will also output values outside of this range, there is however no guarantee for correctness.
+The current test suite validates over 5.000.000.000 random trajectories as well as many additional edge cases. The numerical exactness is tested for the final position and final velocity to be within `1e-8`, for the final acceleration to be within `1e-10`, and for the velocity, acceleration and jerk limit to be within of a numerical error of `1e-12`. These are absolute values - we suggest to scale your input so that these correspond to your required precision of the system. For example, for most real-world systems we suggest to use input values in `[m]` (instead of e.g. `[mm]`), as `1e-8m` is sufficient precise for practical trajectory generation. Furthermore, all kinematic limits should be below `1e12`. The maximal supported trajectory duration is `7e3`, and you can [scale your input parameter](https://github.com/pantor/ruckig/issues/139#issuecomment-1280730316) to avoid that limitation. Note that Ruckig will also output values outside of this range, there is however no guarantee for correctness.
 
 
 ## Benchmark
@@ -275,18 +342,21 @@ For trajectories with intermediate waypoints, we compare Ruckig to [Toppra](http
 Ruckig is written in C++17. It is continuously tested on `ubuntu-latest`, `macos-latest`, and `windows-latest` against following versions
 
 - Doctest v2.4 (only for testing)
-- Pybind11 v2.6 (only for python wrapper)
+- Pybind11 v2.9 (only for python wrapper)
 
-If you still need to use C++11, you can patch the Ruckig *Community Version* by calling `sh scripts/patch-c++11.sh`. Note that this will result in a performance drop of a few percent. Moreover, the Python module is not supported.
+If you still need to use C++11, you can patch the Ruckig *Community Version* by calling `bash scripts/patch-c++11.sh`. Note that this will result in a performance drop of a few percent. Moreover, the Python module is not supported.
 
 
 ## Used By
 
-- [CoppeliaSim](https://www.coppeliarobotics.com/) in their upcoming release.
-- [MoveIt 2](https://moveit.ros.org) for trajectory smoothing.
-- [Struckig](https://github.com/stefanbesler/struckig), a port of Ruckig to Restructered Text for usage on PLCs.
+Ruckig is used by over hundred research labs, companies, and open-source projects worldwide, including:
+- [MoveIt 2](https://moveit.ros.org) for trajectory generation.
+- [CoppeliaSim](https://www.coppeliarobotics.com/) starting from version 4.3.
+- [Fuzzy Logic Robotics](https://flr.io)
+- [Gestalt Robotics](https://www.gestalt-robotics.com)
+- [Struckig](https://github.com/stefanbesler/struckig), a port of Ruckig to Structered Text (ST - IEC61131-3) for usage on PLCs.
 - [Frankx](https://github.com/pantor/frankx) for controlling the Franka Emika robot arm.
-- and others!
+- and many others!
 
 
 ## Citation

@@ -4,6 +4,10 @@
 #include <cmath>
 #include <iostream>
 
+#ifdef WITH_SERIALIZATION
+#include <json/json.hpp>
+#endif
+
 #include <ruckig/utils.hpp>
 
 
@@ -31,14 +35,29 @@ public:
 
     //! Finalize by integrating along kinematic state
     void finalize(double& ps, double& vs, double& as) {
-        duration = t[0] + t[1];
-        for (size_t i = 0; i < 2 && t[i] > 0; ++i) {
-            p[i] = ps;
-            v[i] = vs;
-            a[i] = as;
-            std::tie(ps, vs, as) = integrate(t[i], ps, vs, as, j[i]);
+        if (t[0] <= 0.0 && t[1] <= 0.0) {
+            duration = 0.0;
+            return;
+        }
+
+        duration = t[0];
+        p[0] = ps;
+        v[0] = vs;
+        a[0] = as;
+        std::tie(ps, vs, as) = integrate(t[0], ps, vs, as, j[0]);
+
+        if (t[1] > 0.0) {
+            duration += t[1];
+            p[1] = ps;
+            v[1] = vs;
+            a[1] = as;
+            std::tie(ps, vs, as) = integrate(t[1], ps, vs, as, j[1]);
         }
     }
+
+#ifdef WITH_SERIALIZATION
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(BrakeProfile, duration, t, j, a, v, p)
+#endif
 };
 
 } // namespace ruckig
