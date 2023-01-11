@@ -4,19 +4,22 @@
 #include <tuple>
 #include <vector>
 
+#ifdef WITH_SERIALIZATION
+#include <json/json.hpp>
+#endif
+
 #include <ruckig/input_parameter.hpp>
 #include <ruckig/profile.hpp>
 
 
 namespace ruckig {
 
-template <size_t> class Reflexxes;
-template <size_t> class TargetCalculator;
-template <size_t> class WaypointsCalculator;
+template <size_t, template<class, size_t> class> class TargetCalculator;
+template <size_t, template<class, size_t> class> class WaypointsCalculator;
 
 
 //! Interface for the generated trajectory.
-template<size_t DOFs>
+template<size_t DOFs, template<class, size_t> class CustomVector = StandardVector>
 class Trajectory {
 #if defined WITH_ONLINE_CLIENT
     template<class T> using Container = std::vector<T>;
@@ -24,11 +27,10 @@ class Trajectory {
     template<class T> using Container = std::array<T, 1>;
 #endif
 
-    template<class T> using Vector = typename std::conditional<DOFs >= 1, std::array<T, DOFs>, std::vector<T>>::type;
+    template<class T> using Vector = CustomVector<T, DOFs>;
 
-    friend class Reflexxes<DOFs>;
-    friend class TargetCalculator<DOFs>;
-    friend class WaypointsCalculator<DOFs>;
+    friend class TargetCalculator<DOFs, CustomVector>;
+    friend class WaypointsCalculator<DOFs, CustomVector>;
 
     Container<Vector<Profile>> profiles;
 
@@ -41,14 +43,18 @@ class Trajectory {
     size_t continue_calculation_counter {0};
 
 #if defined WITH_ONLINE_CLIENT
+    template <size_t D = DOFs, typename std::enable_if<D >= 1, int>::type = 0>
     void resize(size_t max_number_of_waypoints) {
         profiles.resize(max_number_of_waypoints + 1);
         cumulative_times.resize(max_number_of_waypoints + 1);
+    }
 
-        if constexpr (DOFs == 0) {
-            for (auto& p: profiles) {
-                p.resize(degrees_of_freedom);
-            }
+    template <size_t D = DOFs, typename std::enable_if<D == 0, int>::type = 0>
+    void resize(size_t max_number_of_waypoints) {
+        resize<1>(max_number_of_waypoints); // Also call resize method above
+
+        for (auto& p: profiles) {
+            p.resize(degrees_of_freedom);
         }
     }
 #endif
@@ -244,6 +250,10 @@ public:
         }
         return false;
     }
+
+#ifdef WITH_SERIALIZATION
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(Trajectory<DOFs>, degrees_of_freedom, profiles, duration, cumulative_times, independent_min_durations)
+#endif
 };
 
 } // namespace ruckig
