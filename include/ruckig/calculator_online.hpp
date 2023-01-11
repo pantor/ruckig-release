@@ -19,9 +19,8 @@
 namespace ruckig {
 
 //! Calculation class for a trajectory along waypoints.
-template<size_t DOFs>
+template<size_t DOFs, template<class, size_t> class CustomVector = StandardVector>
 class WaypointsCalculator {
-private:
     httplib::Client cli {"http://api.ruckig.com"};
 
 public:
@@ -39,8 +38,8 @@ public:
     template <size_t D = DOFs, typename std::enable_if<D == 0, int>::type = 0>
     explicit WaypointsCalculator(size_t dofs, size_t): degrees_of_freedom(dofs) { }
 
-    template<bool throw_error, bool return_error_at_maximal_duration>
-    Result calculate(const InputParameter<DOFs>& input, Trajectory<DOFs>& traj, double, bool& was_interrupted) {
+    template<bool throw_error>
+    Result calculate(const InputParameter<DOFs, CustomVector>& input, Trajectory<DOFs, CustomVector>& traj, double, bool& was_interrupted) {
         std::cout << "[ruckig] calculate trajectory via online API server." << std::endl;
 
         nlohmann::json params;
@@ -97,14 +96,18 @@ public:
         if (input.minimum_duration) {
             params["minimum_duration"] = *input.minimum_duration;
         }
+        if (input.per_section_minimum_duration) {
+            params["per_section_minimum_duration"] = *input.per_section_minimum_duration;
+        }
 
         auto res = cli.Post("/calculate", params.dump(), "application/json");
         if (res->status != 200) {
             if constexpr (throw_error) {
                 throw std::runtime_error("[ruckig] could not reach online API server, error code: " + std::to_string(res->status) + " " + res->body);
+            } else {
+                std::cout << "[ruckig] could not reach online API server, error code: " << res->status << " " << res->body << std::endl;
+                return Result::Error;
             }
-            std::cout << "[ruckig] could not reach online API server, error code: " << res->status << " " << res->body << std::endl;
-            return Result::Error;
         }
         
         auto result = nlohmann::json::parse(res->body);
@@ -116,6 +119,10 @@ public:
         traj.continue_calculation_counter = 0;
         traj.duration = result["duration"].template get<double>();
         traj.cumulative_times = result["cumulative_times"].template get<std::vector<double>>();
+
+        if (!result["message"].empty()) {
+            std::cout << "[ruckig] " << result["message"] << std::endl;
+        }
         
         if (result["result"] == "Result.Error") {
             return Result::Error; 
@@ -127,47 +134,20 @@ public:
         for (size_t i = 0; i < result["profiles"].size(); ++i) {
             for (size_t dof = 0; dof < traj.degrees_of_freedom; ++dof) {
                 auto& p = result["profiles"][i][dof];
-                
-                Profile profile;
-                profile.t = p["t"].template get<std::array<double, 7>>();
-                profile.t_sum = p["t_sum"].template get<std::array<double, 7>>();
-                profile.j = p["j"].template get<std::array<double, 7>>();
-                profile.p = p["p"].template get<std::array<double, 8>>();
-                profile.v = p["v"].template get<std::array<double, 8>>();
-                profile.a = p["a"].template get<std::array<double, 8>>();
-                profile.pf = p["pf"].template get<double>();
-                profile.vf = p["vf"].template get<double>();
-                profile.af = p["af"].template get<double>();
-
-                auto& b = p["brake"];
-                profile.brake.duration = b["duration"].template get<double>();
-                profile.brake.t = p["t"].template get<std::array<double, 2>>();
-                profile.brake.j = p["j"].template get<std::array<double, 2>>();
-                profile.brake.a = p["a"].template get<std::array<double, 2>>();
-                profile.brake.v = p["v"].template get<std::array<double, 2>>();
-                profile.brake.p = p["p"].template get<std::array<double, 2>>();
-
-                auto& a = p["accel"];
-                profile.accel.duration = a["duration"].template get<double>();
-                profile.accel.t = a["t"].template get<std::array<double, 2>>();
-                profile.accel.j = a["j"].template get<std::array<double, 2>>();
-                profile.accel.a = a["a"].template get<std::array<double, 2>>();
-                profile.accel.v = a["v"].template get<std::array<double, 2>>();
-                profile.accel.p = a["p"].template get<std::array<double, 2>>();
-
-                traj.profiles[i][dof] = profile;
+                traj.profiles[i][dof] = p.template get<Profile>();
             }
         }
 
         return Result::Working;
     }
 
-    template<bool throw_error, bool return_error_at_maximal_duration>
-    Result continue_calculation(const InputParameter<DOFs>&, Trajectory<DOFs>&, double, bool&) {
+    template<bool throw_error>
+    Result continue_calculation(const InputParameter<DOFs, CustomVector>&, Trajectory<DOFs, CustomVector>&, double, bool&) {
         if constexpr (throw_error) {
             throw std::runtime_error("[ruckig] continue calculation not available in Ruckig Community Version.");
+        } else {
+            return Result::Error;
         }
-        return Result::Error;
     }
 };
 
