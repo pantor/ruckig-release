@@ -1,3 +1,26 @@
+## ruckig (noetic) - 0.9.2-1
+
+The packages in the `ruckig` repository were released into the `noetic` distro by running `/usr/bin/bloom-release ruckig -t noetic -r noetic` on `Tue, 17 Jan 2023 01:10:12 -0000`
+
+The `ruckig` package was released.
+
+Version of package(s) in repository `ruckig`:
+
+- upstream repository: https://github.com/pantor/ruckig.git
+- release repository: https://github.com/pantor/ruckig-release.git
+- rosdistro version: `0.9.1-1`
+- old version: `0.9.1-1`
+- new version: `0.9.2-1`
+
+Versions of tools used:
+
+- bloom version: `0.11.2`
+- catkin_pkg version: `0.5.2`
+- rosdep version: `0.22.1`
+- rosdistro version: `0.9.0`
+- vcstools version: `0.1.42`
+
+
 ## ruckig (foxy) - 0.9.2-1
 
 The packages in the `ruckig` repository were released into the `foxy` distro by running `/usr/bin/bloom-release ruckig -t foxy -r foxy` on `Tue, 17 Jan 2023 01:08:10 -0000`
